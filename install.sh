@@ -21,8 +21,8 @@ amazon-linux-extras install -y epel
 yum install -y git
 
 # install homebrew
-export HOME=/home/ec2-user
-NONINTERACTIVE=1 /bin/bash -xc "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1
+
+su ec2-user -c 'NONINTERACTIVE=1 /bin/bash -xc "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1'
 
 # create cloud9-like directories
 
