@@ -22,8 +22,7 @@ yum install -y git
 
 # install homebrew
 
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log
-
+NONINTERACTIVE=1 /bin/bash -xc "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1
 
 # create cloud9-like directories
 
