@@ -163,6 +163,7 @@ else
 fi
 
 EOF
+chmod 755 stop-if-inactive.sh
 
 chown -R ec2-user:ec2-user ~ec2-user/.cloudX ~ec2-user/environment
 
