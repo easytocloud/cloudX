@@ -39,7 +39,7 @@ cd ~ec2-user/.cloudX
 
 echo 'SHUTDOWN_TIMEOUT=8' > autoshutdown-configuration
 
-cat > stop-if-inactive.sh << EOF
+cat > stop-if-inactive.sh << 'EOF'
 #!/bin/bash
 
 # Based on AWS default cloud9 script, this is an improved version for use with C9 and VSCODE
