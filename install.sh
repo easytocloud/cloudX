@@ -168,6 +168,6 @@ chown -R ec2-user:ec2-user ~ec2-user/.cloudX ~ec2-user/environment
 
 # execute stop-if-inactive.sh every minute
 
-cat > /etc/crond.d/cloudX-automatic-shutdown << EOF
+cat > /etc/cron.d/cloudX-automatic-shutdown << EOF
 * * * * * root /home/ec2-user/.cloudX/stop-if-inactive.sh
 EOF
