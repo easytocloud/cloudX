@@ -76,7 +76,7 @@ cat > stop-if-inactive.sh << 'EOF'
 
 # -- functions --
 
-exec 3> /home/ec2-user/.c9/autoshutdown-log
+exec 3> /home/ec2-user/.cloudX/autoshutdown-log
 
 is_web_active()
 {
@@ -133,14 +133,14 @@ cancel_shutdown()
 # -- main --
 
 set -euo pipefail
-CONFIG=$(cat /home/ec2-user/.c9/autoshutdown-configuration)
+CONFIG=$(cat /home/ec2-user/.cloudX/autoshutdown-configuration)
 SHUTDOWN_TIMEOUT=${CONFIG#*=}
 if ! [[ $SHUTDOWN_TIMEOUT =~ ^[0-9]*$ ]]; then
-    printf "\n*** shutdown timeout is invalid in /home/ec2-user/.c9/autoshutdown-configuration\n*** AUTOSHUTDOWN deactivated" >&3
+    printf "\n*** shutdown timeout is invalid in /home/ec2-user/.cloudX/autoshutdown-configuration\n*** AUTOSHUTDOWN deactivated" >&3
     exit 1
 fi
 
-touch "/home/ec2-user/.c9/autoshutdown-timestamp"
+touch "/home/ec2-user/.cloudX/autoshutdown-timestamp"
 
 echo "$(date): starting evaluation" >&3
 
