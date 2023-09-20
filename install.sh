@@ -23,7 +23,7 @@ yum install -y git
 # install homebrew
 
 su ec2-user -c 'NONINTERACTIVE=1 /bin/bash -xc "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1'
-su ec2-user -c 'echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"') >> /home/ec2-user/.bash_profile
+su ec2-user -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" ' >> /home/ec2-user/.bash_profile"
 
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
