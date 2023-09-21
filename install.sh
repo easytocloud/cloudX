@@ -159,19 +159,15 @@ cat > /etc/cron.d/cloudX-automatic-shutdown << EOF
 EOF
 
 yum update -y
-yum install -y amazon-linux-extras
-amazon-linux-extras install -y epel
 yum install -y git
-yum groupinstall 'Development Tools'
+yum groupinstall -y 'Development Tools'
 
 # install homebrew
 
 su ec2-user -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1'
 su ec2-user -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" ' >> /home/ec2-user/.bash_profile"
 
-exit 0
-
 su - ec2-user -c "brew tap easytocloud/tap"
 
-su - ec2-user -c "brew install hello"
+# su - ec2-user -c "brew install hello"
 su - ec2-user -c "brew install akskrotate"
