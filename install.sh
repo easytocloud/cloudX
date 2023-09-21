@@ -169,7 +169,9 @@ yum groupinstall 'Development Tools'
 su ec2-user -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1'
 su ec2-user -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" ' >> /home/ec2-user/.bash_profile"
 
+exit 0
+
 su - ec2-user -c "brew tap easytocloud/tap"
 
-su - ec2user -c "brew install hello"
-su - ec2user -c "brew install akskrotate"
+su - ec2-user -c "brew install hello"
+su - ec2-user -c "brew install akskrotate"
