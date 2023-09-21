@@ -22,7 +22,7 @@ mkdir ~ec2-user/.cloudX
 
 cd ~ec2-user/.cloudX
 
-echo 'SHUTDOWN_TIMEOUT=8' > autoshutdown-configuration
+echo 'SHUTDOWN_TIMEOUT=60' > autoshutdown-configuration
 
 cat > stop-if-inactive.sh << 'EOF'
 #!/bin/bash
@@ -171,3 +171,5 @@ su ec2-user -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" 
 
 su - ec2-user -c "brew tap easytocloud/tap"
 
+su - ec2user -c "brew install hello"
+su - ec2user -c "brew install akskrotate"
