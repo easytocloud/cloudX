@@ -156,7 +156,7 @@ chown -R ec2-user:ec2-user ~ec2-user/.cloudX ~ec2-user/environment
 
 # create automatic shutdown service
 
-cat > /etc/systemd.d/system/cloudX-automatic-shutdown.service << EOF
+cat > /etc/systemd/system/cloudX-automatic-shutdown.service << EOF
 [Unit]
 Description=Stop system when idle
 Wants=cloudX-automatic-shutdown.timer
@@ -173,7 +173,7 @@ EOF
 
 # create automatic shutdown timer
 
-cat > /etc/systemd.d/system/cloudX-automatic-shutdown.timer << EOF
+cat > /etc/systemd/system/cloudX-automatic-shutdown.timer << EOF
 [Unit]
 Description=Stop system when idle
 Requires=cloudX-automatic-shutdown.service
@@ -188,7 +188,10 @@ EOF
 
 yum update -y
 yum install -y git
+sleep 5
 yum groupinstall -y 'Development Tools'
+sleep 5
+yum groupinstall -y 'Development Tools' # run twice to avoid error
 
 # install homebrew
 
@@ -202,6 +205,7 @@ su - ec2-user -c "brew install akskrotate"
 
 # start idle monitor
 
-systemctl enable cloudX-automatic-shutdown.timer
-systemctl start cloudX-automatic-shutdown.timer
+systemctl enable cloudX-automatic-shutdown
+systemctl start cloudX-automatic-shutdown
+
 
