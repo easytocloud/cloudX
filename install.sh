@@ -22,7 +22,9 @@ mkdir ~ec2-user/.cloudX
 
 cd ~ec2-user/.cloudX
 
-echo 'SHUTDOWN_TIMEOUT=60' > autoshutdown-configuration
+# create files for autoshutdown
+
+echo 'SHUTDOWN_TIMEOUT=10' > autoshutdown-configuration
 
 cat > stop-if-inactive.sh << 'EOF'
 #!/bin/bash
@@ -31,7 +33,7 @@ cat > stop-if-inactive.sh << 'EOF'
 #
 # How it works:
 #
-# cron - by means of /etc/crond.d/c9-automatic-shutdown - runs this script every minute
+# systemd - by means of /etc/system.d/system/cloudX-automatic-shutdown - runs this script every minute
 # the script schedules a shutdown in 'SHUTDOWN_TIMEOUT' minutes when instance is idle
 # if whithin the shutdown timeout period activity is detected (e.g. reconnect), the shutdown is canceled
 
@@ -84,7 +86,7 @@ is_codeserver_active()
 
     # check if server has established connection
 
-    established=$(/usr/sbin/lsof -i | grep ESTABLISHED | grep $server )
+    established=$(/usr/bin/lsof -i | grep ESTABLISHED | grep $server )
     if [[ -z "$established" ]]; then
         echo "no established connection found" >&3
         return 1
@@ -152,10 +154,36 @@ chmod 755 stop-if-inactive.sh
 
 chown -R ec2-user:ec2-user ~ec2-user/.cloudX ~ec2-user/environment
 
-# execute stop-if-inactive.sh every minute
+# create automatic shutdown service
 
-cat > /etc/cron.d/cloudX-automatic-shutdown << EOF
-* * * * * root /home/ec2-user/.cloudX/stop-if-inactive.sh
+cat > /etc/systemd.d/system/cloudX-automatic-shutdown.service << EOF
+[Unit]
+Description=Stop system when idle
+Wants=cloudX-automatic-shutdown.timer
+
+[Service]
+ExecStart=/home/ec2-user/.cloudX/stop-if-inactive.sh
+Type=oneshot
+
+
+[Install]
+WantedBy=multi-user.target
+
+EOF
+
+# create automatic shutdown timer
+
+cat > /etc/systemd.d/system/cloudX-automatic-shutdown.timer << EOF
+[Unit]
+Description=Stop system when idle
+Requires=cloudX-automatic-shutdown.service
+
+[Timer]
+Unit=cloudX-automatic-shutdown.service
+OnCalendar=*-*-* *:*:00
+
+[Install]
+WantedBy=timers.target
 EOF
 
 yum update -y
@@ -171,3 +199,9 @@ su - ec2-user -c "brew tap easytocloud/tap"
 
 # su - ec2-user -c "brew install hello"
 su - ec2-user -c "brew install akskrotate"
+
+# start idle monitor
+
+systemctl enable cloudX-automatic-shutdown.timer
+systemctl start cloudX-automatic-shutdown.timer
+
