@@ -15,14 +15,14 @@ if [ ! -f /etc/os-release ]; then
   exit 1
 fi
 
+touch /home/ec2-user/.install-running
+
 # create cloud9-like directories
 
 mkdir ~ec2-user/environment
 mkdir ~ec2-user/.cloudX 
 
 cd ~ec2-user/.cloudX
-
-touch /home/ec2-user/.user-data-running
 
 # create files for autoshutdown
 
@@ -189,7 +189,7 @@ WantedBy=timers.target
 EOF
 
 yum update -y
-yum install -y git
+yum install -y git jq
 sleep 5
 yum groupinstall -y 'Development Tools'
 sleep 5
@@ -204,14 +204,7 @@ su - ec2-user -c "brew tap easytocloud/tap"
 
 # su - ec2-user -c "brew install hello"
 su - ec2-user -c "brew install akskrotate"
-
-# start idle monitor
-
-systemctl enable cloudX-automatic-shutdown
-systemctl start cloudX-automatic-shutdown
-
-touch /home/ec2-user/.user-data-done
-rm /home/ec2-user/.user-data-running
+su - ec2-user -c "brew install easytocloud/sso-tools"
 
 # allow login even when shutdown is scheduled
 sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/login 
@@ -220,4 +213,17 @@ sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/login
 
 su - ec2-user -c "git config --global credential.helper '!aws codecommit credential-helper \$@'"
 su - ec2-user -c "git config --global credential.UseHttpPath true"
+
+su - ec2-user -c 'bash -c "$(curl -sfLS https://direnv.net/install.sh)"'
+su - ec2-user -c "echo 'eval \"\$(direnv hook bash)\" ' >> /home/ec2-user/.bash_profile"
+
+# start idle monitor - this should really be the last thing you do ....
+
+systemctl enable cloudX-automatic-shutdown
+systemctl start cloudX-automatic-shutdown
+
+# Cleanup
+
+touch /home/ec2-user/.install-done
+rm /home/ec2-user/.install-running
 
