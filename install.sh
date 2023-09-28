@@ -203,8 +203,8 @@ su ec2-user -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" 
 su - ec2-user -c "brew tap easytocloud/tap"
 
 # su - ec2-user -c "brew install hello"
-su - ec2-user -c "brew install akskrotate"
-su - ec2-user -c "brew install easytocloud/sso-tools"
+# su - ec2-user -c "brew install akskrotate"
+su - ec2-user -c "brew install easytocloud/tap/sso-tools"
 
 # allow login even when shutdown is scheduled
 sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/login 
