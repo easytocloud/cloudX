@@ -198,24 +198,33 @@ yum groupinstall -y 'Development Tools' # run twice to avoid error
 # install homebrew
 
 su ec2-user -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1'
-su ec2-user -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" ' >> /home/ec2-user/.bash_profile"
+su ec2-user -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" ' >> /home/ec2-user/.bashrc"
 
 su - ec2-user -c "brew tap easytocloud/tap"
 
 # su - ec2-user -c "brew install hello"
 # su - ec2-user -c "brew install akskrotate"
-su - ec2-user -c "brew install easytocloud/tap/sso-tools"
+# su - ec2-user -c "brew install easytocloud/tap/sso-tools"
 
 # allow login even when shutdown is scheduled
 sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/login 
 
 # configure git for CodeCommit
 
-su - ec2-user -c "git config --global credential.helper '!aws codecommit credential-helper \$@'"
-su - ec2-user -c "git config --global credential.UseHttpPath true"
+#su - ec2-user -c "git config --global credential.helper '!aws codecommit credential-helper \$@'"
+#su - ec2-user -c "git config --global credential.UseHttpPath true"
 
-su - ec2-user -c 'bash -c "$(curl -sfLS https://direnv.net/install.sh)"'
-su - ec2-user -c "echo 'eval \"\$(direnv hook bash)\" ' >> /home/ec2-user/.bash_profile"
+#su - ec2-user -c 'bash -c "$(curl -sfLS https://direnv.net/install.sh)"'
+#su - ec2-user -c "echo 'eval \"\$(direnv hook bash)\" ' >> /home/ec2-user/.bashrc"
+
+sudo -u ec2-user -i <<'EOF'
+git config --global credential.helper '!aws codecommit credential-helper \$@'
+git config --global credential.UseHttpPath true
+bash -c "$(curl -sfLS https://direnv.net/install.sh)"
+echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
+brew install easytocloud/tap/sso-tools
+echo 'test -d /home/ec2-user/.aws || echo "Please run generate-config to setup .aws for AWS CLI"' >> /home/ec2-user/.bashrc
+EOF
 
 # start idle monitor - this should really be the last thing you do ....
 
