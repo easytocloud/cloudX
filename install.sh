@@ -1,7 +1,7 @@
 #!/bin/bash
 # Install cloudX on Amazon Linux 2023
 #
-# This script is meant to be run as root
+# This script is meant to be from EC2 user data
 #
 # This script will install the following:
 # - git
@@ -21,6 +21,8 @@ mkdir ~ec2-user/environment
 mkdir ~ec2-user/.cloudX 
 
 cd ~ec2-user/.cloudX
+
+touch /home/ec2-user/.user-data-running
 
 # create files for autoshutdown
 
@@ -208,4 +210,9 @@ su - ec2-user -c "brew install akskrotate"
 systemctl enable cloudX-automatic-shutdown
 systemctl start cloudX-automatic-shutdown
 
+touch /home/ec2-user/.user-data-done
+rm /home/ec2-user/.user-data-running
+
+# allow login even when shutdown is scheduled
+sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/login 
 
