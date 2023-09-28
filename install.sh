@@ -216,3 +216,8 @@ rm /home/ec2-user/.user-data-running
 # allow login even when shutdown is scheduled
 sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/login 
 
+# configure git for CodeCommit
+
+su - ec2-user -c "git config --global credential.helper '!aws codecommit credential-helper \$@'"
+su - ec2-user -c "git config --global credential.UseHttpPath true"
+
