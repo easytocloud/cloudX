@@ -67,40 +67,26 @@ cat > stop-if-inactive.sh << 'EOF'
 
 exec 3> /home/ec2-user/.cloudX/autoshutdown-log
 
-is_web_active()
+
+is_ec2user_connected()
 {
-    printf "\n$(date): output is_web_active():\n" >&3
-    pgrep -f vfs-worker >&3
-}
-
-is_codeserver_active()
-{
-    printf "\n$(date): output is_codeserver_active():\n" >&3
-
-    # server is started as sh .... server-main, so we need to filter out the sh process
-
-    server=$(pgrep -f server-main -a | grep -v 'sh ' | awk '{print $1}')
-    if [[ -z "$server" ]]; then
-        echo "no server found" >&3
-        return 1
-    fi
-    echo "server pid: $server" >&3
+    printf "\n$(date): output is_ec2user_connected():\n" >&3
 
     # check if server has established connection
 
-    established=$(/usr/bin/lsof -i | grep ESTABLISHED | grep $server )
+    established=$(/usr/bin/lsof -i -a -u ec2-user | grep 'ESTABLISHED' )
     if [[ -z "$established" ]]; then
         echo "no established connection found" >&3
         return 1
     fi
-    echo "established connection: $established" >&3
+    echo "established connections:\n $established" >&3
 
     return 0
 }
 
 is_active()
 {
-    is_web_active || is_codeserver_active
+    is_ec2user_connected()
 }
 
 is_shutting_down() {
@@ -207,7 +193,7 @@ su - ec2-user -c "brew tap easytocloud/tap"
 # su - ec2-user -c "brew install easytocloud/tap/sso-tools"
 
 # allow login even when shutdown is scheduled
-sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/login 
+sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/sshd 
 
 # configure git for CodeCommit
 
@@ -223,7 +209,7 @@ git config --global credential.UseHttpPath true
 bash -c "$(curl -sfLS https://direnv.net/install.sh)"
 echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
 brew install easytocloud/tap/sso-tools
-echo 'test -d /home/ec2-user/.aws || echo "Please run generate-config to setup .aws for AWS CLI"' >> /home/ec2-user/.bashrc
+echo 'test -d /home/ec2-user/.aws || echo "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
 EOF
 
 # start idle monitor - this should really be the last thing you do ....
