@@ -189,17 +189,19 @@ yum groupinstall -y 'Development Tools'
 sleep 5
 yum groupinstall -y 'Development Tools' # run twice to avoid error
 
+bash -c "$(curl -sfLS https://direnv.net/install.sh)"
+
 # ## ADDITIONAL SOFTWARE - EC2-USER LEVEL ##
 
 sudo -u ec2-user -i <<'EOF'
 # install homebrew
 NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1
-echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" ' >> /home/ec2-user/.bashrc
+echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 # setup git
 git config --global credential.helper '!aws codecommit credential-helper \$@'
 git config --global credential.UseHttpPath true
-# install direnv
-bash -c "$(curl -sfLS https://direnv.net/install.sh)"
+# set paths for direnv
 echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
 # install sso-tools
 brew tap easytocloud/tap
