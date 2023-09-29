@@ -1,19 +1,24 @@
 #!/bin/bash
+#
 # Install cloudX on Amazon Linux 2023
 #
-# This script is meant to be from EC2 user data
+# This script is meant to be run from EC2 user data
 #
-# This script will install the following:
-# - git
-# - Homebrew
-# - cloudX
+# This script will 
+#
+# - configure automatic shutdown
+# - create cloud9-like directories
+# - install additional software
 #
 
 # check os version
+
 if [ ! -f /etc/os-release ]; then
   echo "This script only supports Amazon Linux"
   exit 1
 fi
+
+# signal that install is running
 
 touch /home/ec2-user/.install-running
 
@@ -24,13 +29,13 @@ mkdir ~ec2-user/.cloudX
 
 cd ~ec2-user/.cloudX
 
-# create files for autoshutdown
+# ### AUTO SHUTDOWN ###
 
 echo 'SHUTDOWN_TIMEOUT=10' > autoshutdown-configuration
 
 cat > stop-if-inactive.sh << 'EOF'
 #!/bin/bash
-
+#
 # Based on AWS default cloud9 script, this is an improved version for use with C9 and VSCODE
 #
 # How it works:
@@ -67,7 +72,6 @@ cat > stop-if-inactive.sh << 'EOF'
 
 exec 3> /home/ec2-user/.cloudX/autoshutdown-log
 
-
 is_ec2user_connected()
 {
     printf "\n$(date): output is_ec2user_connected():\n" >&3
@@ -79,14 +83,14 @@ is_ec2user_connected()
         echo "no established connection found" >&3
         return 1
     fi
-    echo "established connections:\n $established" >&3
+    printf "established connections:\n $established" >&3
 
     return 0
 }
 
 is_active()
 {
-    is_ec2user_connected()
+    is_ec2user_connected
 }
 
 is_shutting_down() {
@@ -153,7 +157,6 @@ Wants=cloudX-automatic-shutdown.timer
 ExecStart=/home/ec2-user/.cloudX/stop-if-inactive.sh
 Type=oneshot
 
-
 [Install]
 WantedBy=multi-user.target
 
@@ -174,6 +177,11 @@ OnCalendar=*-*-* *:*:00
 WantedBy=timers.target
 EOF
 
+# allow ssh login even when shutdown is scheduled
+sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/sshd 
+
+# ## ADDITIONAL SOFTWARE - SYSTEM LEVEL ##
+
 yum update -y
 yum install -y git jq
 sleep 5
@@ -181,35 +189,22 @@ yum groupinstall -y 'Development Tools'
 sleep 5
 yum groupinstall -y 'Development Tools' # run twice to avoid error
 
-# install homebrew
-
-su ec2-user -c 'NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1'
-su ec2-user -c "echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" ' >> /home/ec2-user/.bashrc"
-
-su - ec2-user -c "brew tap easytocloud/tap"
-
-# su - ec2-user -c "brew install hello"
-# su - ec2-user -c "brew install akskrotate"
-# su - ec2-user -c "brew install easytocloud/tap/sso-tools"
-
-# allow login even when shutdown is scheduled
-sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/sshd 
-
-# configure git for CodeCommit
-
-#su - ec2-user -c "git config --global credential.helper '!aws codecommit credential-helper \$@'"
-#su - ec2-user -c "git config --global credential.UseHttpPath true"
-
-#su - ec2-user -c 'bash -c "$(curl -sfLS https://direnv.net/install.sh)"'
-#su - ec2-user -c "echo 'eval \"\$(direnv hook bash)\" ' >> /home/ec2-user/.bashrc"
+# ## ADDITIONAL SOFTWARE - EC2-USER LEVEL ##
 
 sudo -u ec2-user -i <<'EOF'
+# install homebrew
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1
+echo 'eval \"\$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)\" ' >> /home/ec2-user/.bashrc
+# setup git
 git config --global credential.helper '!aws codecommit credential-helper \$@'
 git config --global credential.UseHttpPath true
+# install direnv
 bash -c "$(curl -sfLS https://direnv.net/install.sh)"
 echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
+# install sso-tools
+brew tap easytocloud/tap
 brew install easytocloud/tap/sso-tools
-echo 'test -d /home/ec2-user/.aws || echo "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
+echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
 EOF
 
 # start idle monitor - this should really be the last thing you do ....
@@ -217,8 +212,9 @@ EOF
 systemctl enable cloudX-automatic-shutdown
 systemctl start cloudX-automatic-shutdown
 
-# Cleanup
+# ... before Cleanup
 
+# signal that install is done
 touch /home/ec2-user/.install-done
 rm /home/ec2-user/.install-running
 
