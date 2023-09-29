@@ -6,8 +6,8 @@
 #
 # This script will 
 #
-# - configure automatic shutdown
 # - create cloud9-like directories
+# - configure automatic shutdown
 # - install additional software
 #
 
@@ -195,18 +195,22 @@ bash -c "$(curl -sfLS https://direnv.net/install.sh)"
 
 sudo -u ec2-user -i <<'EOF'
 # install homebrew
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" > /tmp/brewinstall.log 2>&1
-echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
 # setup git
 git config --global credential.helper '!aws codecommit credential-helper \$@'
 git config --global credential.UseHttpPath true
-# set paths for direnv
+
+# update .bashrc
+echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
 echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
+
 # install sso-tools
 brew tap easytocloud/tap
 brew install easytocloud/tap/sso-tools
 echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
+
 EOF
 
 # start idle monitor - this should really be the last thing you do ....
