@@ -11,8 +11,8 @@
 
 HOST=$1
 PORT=$2
-PUBLIC_KEY_PATH="${3:-cloud9.pub}"
-export AWS_PROFILE="${4:-cloud9}"
+PUBLIC_KEY_PATH="${3:-~/.ssh/vscode/vscode.pub}"
+export AWS_PROFILE="${4:-vscode}"
 AWS_ENV="${5:-standard}"
 export AWS_REGION="${6:-eu-west-1}"
 
