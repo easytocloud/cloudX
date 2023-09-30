@@ -67,7 +67,7 @@ fi
 # Setup SSM session ..
 
 # .. by first pushing a public key to the instance
-grep -q ${HOST} ~/.ssh/know_hosts || aws ec2-instance-connect send-ssh-public-key \
+grep -q ${HOST} ~/.ssh/known_hosts || aws ec2-instance-connect send-ssh-public-key \
     --instance-id "${HOST}" \
     --instance-os-user "ec2-user" \
     --ssh-public-key file://${PUBLIC_KEY_PATH} > /dev/null 2>&1
