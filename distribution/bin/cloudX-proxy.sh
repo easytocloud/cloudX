@@ -11,9 +11,9 @@
 
 HOST=$1
 PORT=$2
-PUBLIC_KEY_PATH="${3:-~/.ssh/vscode/vscode.pub}"
+AWS_ENV="${3:-standard}"
 export AWS_PROFILE="${4:-vscode}"
-AWS_ENV="${5:-standard}"
+PUBLIC_KEY_PATH="${5:-~/.ssh/vscode/vscode.pub}"
 export AWS_REGION="${6:-eu-west-1}"
 
 # Parameters to control patience when instance has to be resumed before connection is possible
