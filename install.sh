@@ -233,6 +233,7 @@ case "$zsh_tag" in
   *true*)
     # install vscode
     sudo -u ec2-user -i <<'EOF'
+    brew install zsh
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
 EOF
     ;;
