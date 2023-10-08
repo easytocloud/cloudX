@@ -206,12 +206,40 @@ git config --global credential.UseHttpPath true
 echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
 echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
 
+# update .zshrc
+echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.zshrc
+echo 'eval "$(direnv hook zsh)" ' >> /home/ec2-user/.zshrc
+
 # install sso-tools
 brew tap easytocloud/tap
 brew install easytocloud/tap/sso-tools
 echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
+echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
 
 EOF
+
+# check the ec2 instance tag 'cloudX' for additional software to install
+
+# get instance metadata from IDMSv2
+
+export TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+instanceId=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.254/latest/meta-data/instance-id)
+
+# get value of tag 'zsh' from instance metadata
+
+zsh_tag=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
+
+case "$zsh_tag" in
+  *true*)
+    # install vscode
+    sudo -u ec2-user -i <<'EOF'
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+EOF
+    ;;
+  *false*)
+    ;;
+esac
+
 
 # start idle monitor - this should really be the last thing you do ....
 
