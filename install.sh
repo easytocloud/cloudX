@@ -39,7 +39,14 @@ instanceId=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.25
 
 install_brew=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`brew`].Value' --output text )
 install_direnv=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`direnv`].Value' --output text )
+install_sso=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`sso`].Value' --output text )
 install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
+
+# for packages installed with brew, make sure to install brew regardless users choice
+
+${install_zsh} && install_brew = true
+${install_direnv} && install_brew = true
+
 
 #install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
 
@@ -197,7 +204,7 @@ ${install_direnv} && $bash -c "$(curl -sfLS https://direnv.net/install.sh)"
 
 # ## ADDITIONAL SOFTWARE - EC2-USER LEVEL ##
 
-sudo -u ec2-user -i <<'EOF'
+sudo -u ec2-user -i <<EOF
 # configure git for codecommit
 
 git config --global credential.helper '!aws codecommit credential-helper \$@'
@@ -208,26 +215,38 @@ ${install_brew} && NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githu
 ${install_brew} && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
 # install zsh
-${install_zsh} && brew install zsh &&  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+if ${install_zsh}
+then
+    brew install zsh
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+    echo  /home/linuxbrew/.linuxbrew/bin/zsh | sudo tee -a /etc/shells
+    chsh -s /home/linuxbrew/.linuxbrew/bin/zsh ec2-user
+fi
 
 # install direnv
 ${install_direnv} && brew install direnv
 
+if ${install_sso}
+then
+    # install sso-tools
+    brew tap easytocloud/tap
+    brew install easytocloud/tap/sso-tools
+fi
+
 # update .bashrc
 ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
 ${install_direnv} && echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
+${install_sso} && echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
+
 
 # update .zshrc
 if [ -f /home/ec2-user/.zshrc ]; then
   ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.zshrc
   ${install_direnv} && echo 'eval "$(direnv hook zsh)" ' >> /home/ec2-user/.zshrc
+  ${install_sso} && echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
+
 fi
 
-# install sso-tools
-brew tap easytocloud/tap
-brew install easytocloud/tap/sso-tools
-echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
-echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
 
 EOF
 
