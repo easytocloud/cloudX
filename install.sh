@@ -281,7 +281,7 @@ ${install_privpage} && brew install easytocloud/tap/privpage
 # update .bashrc
 ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
 ${install_direnv} && echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
-${install_sso} && echo 'test -f /home/ec2-user/.aws/config.needed || printf "\n\n** Please run generate-sso-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
+${install_sso} && echo 'test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run generate-sso-config to configure AWS CLI **\n\n"' >> /home/ec2-user/.bashrc
 ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.bashrc
 ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.bashrc
 
@@ -289,7 +289,7 @@ ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.bashr
 if [ -f /home/ec2-user/.zshrc ]; then
   ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.zshrc
   ${install_direnv} && echo 'eval "$(direnv hook zsh)" ' >> /home/ec2-user/.zshrc
-  ${install_sso} && echo 'test -f /home/ec2-user/.aws/config.needed || printf "\n\n** Please run generate-sso-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
+  ${install_sso} && echo 'test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run generate-sso-config to configure AWS CLI **\n\n"' >> /home/ec2-user/.zshrc
   ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.zshrc
   ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.zshrc
 fi
