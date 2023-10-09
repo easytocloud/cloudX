@@ -44,9 +44,9 @@ install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId
 
 # for packages installed with brew, make sure to install brew regardless users choice
 
-${install_zsh} && install_brew = true
-${install_direnv} && install_brew = true
-
+${install_direnv}   && install_brew = true
+${install_sso}      && install_brew = true
+${install_zsh}      && install_brew = true
 
 #install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
 
