@@ -46,6 +46,7 @@ export install_docker=$(aws ec2 describe-tags --filter Name=resource-id,Values=$
 export install_anaconda=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`anaconda`].Value' --output text )
 export install_nvm=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`nvm`].Value' --output text )
 export install_privpage=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`privpage`].Value' --output text )
+export install_fortools=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`fortools`].Value' --output text)
 
 export SSODomain=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`SSODomain`].Value' --output text )
 
@@ -56,6 +57,7 @@ ${install_direnv}   && install_brew=true
 ${install_sso}      && install_brew=true
 ${install_zsh}      && install_brew=true
 ${install_privpage} && install_brew=true
+${install_fortools} && install_brew=true
 
 # ### AUTO SHUTDOWN ###
 
@@ -225,6 +227,7 @@ git config --global credential.UseHttpPath true
 # install homebrew
 ${install_brew} && NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ${install_brew} && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+${install_brew} && brew tap easytocloud/tap
 
 # install zsh
 if ${install_zsh}
@@ -243,7 +246,6 @@ ${install_direnv} && brew install direnv
 if ${install_sso}
 then
     # install sso-tools
-    brew tap easytocloud/tap
     brew install easytocloud/tap/sso-tools
     mkdir -p /home/ec2-user/.aws
 
@@ -253,6 +255,12 @@ then
     echo "sso_registration_scopes = sso:account:access" >> /home/ec2-user/.aws/config
     cat ~/.aws/config
     touch /home/ec2-user/.aws/config.needed
+fi
+
+if ${install_fortools}
+then
+    # install fortools
+    brew install easytocloud/tap/for-tools
 fi
 
 # install pip
