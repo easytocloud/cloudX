@@ -27,7 +27,21 @@ touch /home/ec2-user/.install-running
 mkdir ~ec2-user/environment
 mkdir ~ec2-user/.cloudX 
 
+
+
 cd ~ec2-user/.cloudX
+
+# Check tags for extra software to install
+# get instance metadata from IDMSv2
+
+export TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+instanceId=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.254/latest/meta-data/instance-id)
+
+install_brew=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`brew`].Value' --output text )
+install_direnv=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`direnv`].Value' --output text )
+install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
+
+#install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
 
 # ### AUTO SHUTDOWN ###
 
@@ -55,18 +69,6 @@ cat > stop-if-inactive.sh << 'EOF'
 # if a shutdown process is running
 
 # active ssh/ssm sessions are not taken into account for idle detection !!
-
-# History:
-#
-# 2023-11-12: version 0.3.0 
-#             fundamental rewrite of idle detection vscode-server
-#             - use lsof to check for established connection
-#             more comprehensive logging
-#             improved error handling
-#             semantic versioning
-# 
-# earlier history/versions not recorded in this file
-#
 
 # -- functions --
 
@@ -180,7 +182,7 @@ EOF
 # allow ssh login even when shutdown is scheduled
 sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/sshd 
 
-# ## ADDITIONAL SOFTWARE - SYSTEM LEVEL ##
+# ## ADDITIONAL SOFTWARE - MANDATORY - SYSTEM LEVEL ##
 
 yum update -y
 yum install -y git jq
@@ -189,26 +191,37 @@ yum groupinstall -y 'Development Tools'
 sleep 5
 yum groupinstall -y 'Development Tools' # run twice to avoid error
 
-bash -c "$(curl -sfLS https://direnv.net/install.sh)"
+# ## ADDITOINAL SOFTWARE - OPTIONALLY BASED ON TAGS ##
+
+${install_direnv} && $bash -c "$(curl -sfLS https://direnv.net/install.sh)"
 
 # ## ADDITIONAL SOFTWARE - EC2-USER LEVEL ##
 
 sudo -u ec2-user -i <<'EOF'
-# install homebrew
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+# configure git for codecommit
 
-# setup git
 git config --global credential.helper '!aws codecommit credential-helper \$@'
 git config --global credential.UseHttpPath true
 
+# install homebrew
+${install_brew} && NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+${install_brew} && eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+# install zsh
+${install_zsh} && brew install zsh &&  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+
+# install direnv
+${install_direnv} && brew install direnv
+
 # update .bashrc
-echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
-echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
+${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
+${install_direnv} && echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
 
 # update .zshrc
-echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.zshrc
-echo 'eval "$(direnv hook zsh)" ' >> /home/ec2-user/.zshrc
+if [ -f /home/ec2-user/.zshrc ]; then
+  ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.zshrc
+  ${install_direnv} && echo 'eval "$(direnv hook zsh)" ' >> /home/ec2-user/.zshrc
+fi
 
 # install sso-tools
 brew tap easytocloud/tap
@@ -217,29 +230,6 @@ echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config t
 echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
 
 EOF
-
-# check the ec2 instance tag 'cloudX' for additional software to install
-
-# get instance metadata from IDMSv2
-
-export TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
-instanceId=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.254/latest/meta-data/instance-id)
-
-# get value of tag 'zsh' from instance metadata
-
-zsh_tag=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
-
-case "$zsh_tag" in
-  *true*)
-    # install vscode
-    sudo -u ec2-user -i <<'EOF'
-    brew install zsh
-    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-EOF
-    ;;
-  *false*)
-    ;;
-esac
 
 
 # start idle monitor - this should really be the last thing you do ....
