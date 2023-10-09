@@ -206,13 +206,18 @@ sleep 5
 yum groupinstall -y 'Development Tools' # run twice to avoid error
 
 # ## ADDITOINAL SOFTWARE - OPTIONALLY BASED ON TAGS ##
+
+# create env file for use with sudo -u ec2-user -i
+
 env | grep install_ > /home/ec2-user/.env
 env | grep SSODomain >> /home/ec2-user/.env
 
 sudo -u ec2-user -i <<'EOF'
-# configure git for codecommit
+# load env file
 source /home/ec2-user/.env
 rm -f /home/ec2-user/.env
+
+# configure git for codecommit
 
 git config --global credential.helper '!aws codecommit credential-helper $@'
 git config --global credential.UseHttpPath true
@@ -241,11 +246,7 @@ then
     brew tap easytocloud/tap
     brew install easytocloud/tap/sso-tools
     mkdir -p /home/ec2-user/.aws
-    
-    echo "===> env"
-    env
-    echo "===> SSODomain="${SSODomain}
-    
+
     echo "[sso-session sso]" > /home/ec2-user/.aws/config
     echo "sso_start_url = https://"${SSODomain}"/start#/" >> /home/ec2-user/.aws/config
     echo "sso_region = eu-west-1" >> /home/ec2-user/.aws/config
