@@ -237,13 +237,13 @@ then
     brew tap easytocloud/tap
     brew install easytocloud/tap/sso-tools
     mkdir -p /home/ec2-user/.aws
-    cat >> /home/ec2-user/.aws/config << EOF
+    cat >> /home/ec2-user/.aws/config << EOCONF
     [sso-session sso]
     sso_start_url = https://${SSODomain}/start
     sso_region = eu-west-1
     sso_registration_scopes = sso:account:access
 
-EOF
+EOCONF
 fi
 
 # install pip
