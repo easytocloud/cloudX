@@ -47,6 +47,9 @@ export install_anaconda=$(aws ec2 describe-tags --filter Name=resource-id,Values
 export install_nvm=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`nvm`].Value' --output text )
 export install_privpage=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`privpage`].Value' --output text )
 
+export SSODomain=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`SSODomain`].Value' --output text )
+
+
 # for packages installed with brew, make sure to install brew regardless users choice
 
 ${install_direnv}   && install_brew=true
@@ -233,6 +236,14 @@ then
     # install sso-tools
     brew tap easytocloud/tap
     brew install easytocloud/tap/sso-tools
+    mkdir -p /home/ec2-user/.aws
+    cat >> /home/ec2-user/.aws/config << EOF
+
+    [sso-session sso]
+    sso_start_url = https://${SSODomain}/start
+    sso_region = eu-west-1
+    sso_registration_scopes = sso:account:access
+EOF
 fi
 
 # install pip
@@ -262,7 +273,7 @@ ${install_privpage} && brew install easytocloud/tap/privpage
 # update .bashrc
 ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
 ${install_direnv} && echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
-${install_sso} && echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
+${install_sso} && echo 'test -f /home/ec2-user/.aws/config.needed || printf "\n\n** Please run generate-sso-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
 ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.bashrc
 ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.bashrc
 
@@ -270,7 +281,7 @@ ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.bashr
 if [ -f /home/ec2-user/.zshrc ]; then
   ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.zshrc
   ${install_direnv} && echo 'eval "$(direnv hook zsh)" ' >> /home/ec2-user/.zshrc
-  ${install_sso} && echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
+  ${install_sso} && echo 'test -f /home/ec2-user/.aws/config.needed || printf "\n\n** Please run generate-sso-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
   ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.zshrc
   ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.zshrc
 fi
