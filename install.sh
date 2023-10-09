@@ -35,12 +35,16 @@ cd ~ec2-user/.cloudX
 # get instance metadata from IDMSv2
 
 TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
-instanceId=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" -v http://169.254.169.254/latest/meta-data/instance-id)
+instanceId=$(curl -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
 
 export install_brew=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`brew`].Value' --output text )
 export install_direnv=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`direnv`].Value' --output text )
 export install_sso=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`sso`].Value' --output text )
 export install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
+export install_pip=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`pip`].Value' --output text )
+export install_docker=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`docker`].Value' --output text )
+export install_anaconda=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`anaconda`].Value' --output text )
+export install_nvm=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`nvm`].Value' --output text )
 
 # for packages installed with brew, make sure to install brew regardless users choice
 
@@ -48,7 +52,6 @@ ${install_direnv}   && install_brew=true
 ${install_sso}      && install_brew=true
 ${install_zsh}      && install_brew=true
 
-#install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
 
 # ### AUTO SHUTDOWN ###
 
@@ -200,14 +203,10 @@ yum groupinstall -y 'Development Tools' # run twice to avoid error
 
 # ## ADDITOINAL SOFTWARE - OPTIONALLY BASED ON TAGS ##
 
-# ${install_direnv} && bash -c "$(curl -sfLS https://direnv.net/install.sh)"
-
-# ## ADDITIONAL SOFTWARE - EC2-USER LEVEL ##
-
 sudo -u ec2-user -i <<'EOF'
 # configure git for codecommit
 
-git config --global credential.helper '!aws codecommit credential-helper \$@'
+git config --global credential.helper '!aws codecommit credential-helper $@'
 git config --global credential.UseHttpPath true
 
 # install homebrew
@@ -219,8 +218,9 @@ if ${install_zsh}
 then
     brew install zsh
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+    # change default theme to agnoster
+    sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="agnoster"/' /home/ec2-user/.zshrc
     echo  /home/linuxbrew/.linuxbrew/bin/zsh | sudo tee -a /etc/shells
-    chsh -s /home/linuxbrew/.linuxbrew/bin/zsh ec2-user
 fi
 
 # install direnv
@@ -233,10 +233,35 @@ then
     brew install easytocloud/tap/sso-tools
 fi
 
+# install pip
+if ${install_pip}
+then
+    curl -O https://bootstrap.pypa.io/get-pip.py
+    python3 get-pip.py --user
+    rm get-pip.py
+fi
+
+# install anaconda
+if ${install_anaconda}
+then
+    curl -O https://repo.anaconda.com/archive/Anaconda3-2023.03-Linux-x86_64.sh
+    bash Anaconda3-2023.03-Linux-x86_64.sh -b -p /home/ec2-user/anaconda3
+    rm Anaconda3-2023.03-Linux-x86_64.sh
+fi
+
+# install nvm
+if ${install_nvm}
+then
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
+fi
+
+
+
 # update .bashrc
 ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
 ${install_direnv} && echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
 ${install_sso} && echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
+${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.bashrc
 
 
 # update .zshrc
@@ -244,13 +269,21 @@ if [ -f /home/ec2-user/.zshrc ]; then
   ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.zshrc
   ${install_direnv} && echo 'eval "$(direnv hook zsh)" ' >> /home/ec2-user/.zshrc
   ${install_sso} && echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
-
+  ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.zshrc
 fi
-
 
 EOF
 
+${install_zsh} && chsh -s /home/linuxbrew/.linuxbrew/bin/zsh ec2-user
 
+# install docker
+if ${install_docker}
+then
+    yum install -y docker
+    usermod -a -G docker ec2-user
+    systemctl enable docker
+    systemctl start docker
+fi
 # start idle monitor - this should really be the last thing you do ....
 
 systemctl enable cloudX-automatic-shutdown
