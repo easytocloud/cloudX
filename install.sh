@@ -45,13 +45,14 @@ export install_pip=$(aws ec2 describe-tags --filter Name=resource-id,Values=$ins
 export install_docker=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`docker`].Value' --output text )
 export install_anaconda=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`anaconda`].Value' --output text )
 export install_nvm=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`nvm`].Value' --output text )
+export install_privpage=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`privpage`].Value' --output text )
 
 # for packages installed with brew, make sure to install brew regardless users choice
 
 ${install_direnv}   && install_brew=true
 ${install_sso}      && install_brew=true
 ${install_zsh}      && install_brew=true
-
+${install_privpage} && install_brew=true
 
 # ### AUTO SHUTDOWN ###
 
@@ -218,10 +219,10 @@ if ${install_zsh}
 then
     brew install zsh
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
-    # change default theme to agnoster
+    # change default theme to easytocloud
     wget https://raw.githubusercontent.com/easytocloud/oh-my-easytocloud/main/themes/easytocloud.zsh-theme -O ~/.oh-my-zsh/custom/themes/easytocloud.zsh-theme
     sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="easytocloud"/' /home/ec2-user/.zshrc
-    echo  /home/linuxbrew/.linuxbrew/bin/zsh | sudo tee -a /etc/shells
+    echo  '/home/linuxbrew/.linuxbrew/bin/zsh' | sudo tee -a /etc/shells
 fi
 
 # install direnv
@@ -256,14 +257,14 @@ then
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
 fi
 
-
+${install_privpage} && brew install easytocloud/tap/privpage
 
 # update .bashrc
 ${install_brew} && echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)" ' >> /home/ec2-user/.bashrc
 ${install_direnv} && echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashrc
 ${install_sso} && echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.bashrc
 ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.bashrc
-
+${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.bashrc
 
 # update .zshrc
 if [ -f /home/ec2-user/.zshrc ]; then
@@ -271,6 +272,7 @@ if [ -f /home/ec2-user/.zshrc ]; then
   ${install_direnv} && echo 'eval "$(direnv hook zsh)" ' >> /home/ec2-user/.zshrc
   ${install_sso} && echo 'test -d /home/ec2-user/.aws || printf "\n\n** Please run generate-config to configure AWS CLI **\n"' >> /home/ec2-user/.zshrc
   ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.zshrc
+  ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.zshrc
 fi
 
 EOF
