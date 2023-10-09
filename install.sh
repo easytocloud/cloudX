@@ -219,7 +219,8 @@ then
     brew install zsh
     sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
     # change default theme to agnoster
-    sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="agnoster"/' /home/ec2-user/.zshrc
+    wget https://raw.githubusercontent.com/easytocloud/oh-my-easytocloud/main/themes/easytocloud.zsh-theme -O ~/.oh-my-zsh/custom/themes/easytocloud.zsh-theme
+    sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="easytocloud"/' /home/ec2-user/.zshrc
     echo  /home/linuxbrew/.linuxbrew/bin/zsh | sudo tee -a /etc/shells
 fi
 
