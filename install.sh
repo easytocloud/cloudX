@@ -44,9 +44,9 @@ install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId
 
 # for packages installed with brew, make sure to install brew regardless users choice
 
-${install_direnv}   && install_brew = true
-${install_sso}      && install_brew = true
-${install_zsh}      && install_brew = true
+${install_direnv}   && install_brew=true
+${install_sso}      && install_brew=true
+${install_zsh}      && install_brew=true
 
 #install_zsh=$(aws ec2 describe-tags --filter Name=resource-id,Values=$instanceId --query 'Tags[?Key==`zsh`].Value' --output text )
 
@@ -192,7 +192,7 @@ sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/sshd
 # ## ADDITIONAL SOFTWARE - MANDATORY - SYSTEM LEVEL ##
 
 yum update -y
-yum install -y git jq
+yum install -y git jq util-linux-user
 sleep 5
 yum groupinstall -y 'Development Tools'
 sleep 5
@@ -200,7 +200,7 @@ yum groupinstall -y 'Development Tools' # run twice to avoid error
 
 # ## ADDITOINAL SOFTWARE - OPTIONALLY BASED ON TAGS ##
 
-${install_direnv} && $bash -c "$(curl -sfLS https://direnv.net/install.sh)"
+# ${install_direnv} && bash -c "$(curl -sfLS https://direnv.net/install.sh)"
 
 # ## ADDITIONAL SOFTWARE - EC2-USER LEVEL ##
 
