@@ -293,6 +293,8 @@ ${install_direnv} && echo 'eval "$(direnv hook bash)" ' >> /home/ec2-user/.bashr
 ${install_sso} && echo 'test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run generate-sso-config to configure AWS CLI **\n\n"' >> /home/ec2-user/.bashrc
 ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.bashrc
 ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.bashrc
+echo "complete -C '/usr/bin/aws_completer' aws" >> /home/ec2-user/.bashrc
+
 
 # update .zshrc
 if [ -f /home/ec2-user/.zshrc ]; then
@@ -301,6 +303,9 @@ if [ -f /home/ec2-user/.zshrc ]; then
   ${install_sso} && echo 'test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run generate-sso-config to configure AWS CLI **\n\n"' >> /home/ec2-user/.zshrc
   ${install_anaconda} && echo 'export PATH=/home/ec2-user/anaconda3/bin:$PATH' >> /home/ec2-user/.zshrc
   ${install_privpage} && echo 'export AWS_PAGER=privpage' >> /home/ec2-user/.zshrc
+  echo 'autoload bashcompinit && bashcompinit' >> /home/ec2-user/.zshrc
+  echo 'autoload -Uz compinit && compinit' >> /home/ec2-user/.zshrc
+  echo "complete -C '/usr/bin/aws_completer' aws" >> /home/ec2-user/.zshrc
 fi
 
 EOF
