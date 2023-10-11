@@ -270,7 +270,6 @@ then
     python3 get-pip.py --user
     rm get-pip.py
     pip install pyfiglet
-    echo 'pyfiglet $@
 fi
 
 # install anaconda
