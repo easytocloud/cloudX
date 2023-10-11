@@ -269,6 +269,8 @@ then
     curl -O https://bootstrap.pypa.io/get-pip.py
     python3 get-pip.py --user
     rm get-pip.py
+    pip install pyfiglet
+    echo 'pyfiglet $@
 fi
 
 # install anaconda
@@ -321,6 +323,26 @@ then
     systemctl start docker
 fi
 # start idle monitor - this should really be the last thing you do ....
+
+cat > /usr/local/bin/banner << 'EOF'
+#!/bin/bash
+# wrapper to use banner either as native tool (AL2) or via pyfiglet (AL2023)
+# pyfiglet will be installed if not yet available
+
+if [[ "$@" == "" ]]
+then
+    echo "Usage: banner string" >&2
+    exit 2
+fi
+
+if [[ -x /usr/bin/banner ]]
+then
+    /usr/bin/banner "$@"
+else
+    pyfiglet "$@" || (pip install pyfiglet && pyfiglet "$@")
+fi
+EOF
+chmod 755 /usr/local/bin/banner
 
 systemctl enable cloudX-automatic-shutdown
 systemctl start cloudX-automatic-shutdown
