@@ -1,0 +1,42 @@
+#
+# template to create IAM user as member of cloudX group
+#
+
+Parameters:
+
+  UserName:
+    Type: String
+    Default: cloudXuser
+
+  GroupName:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /hc/cloudX/GroupName
+
+Resources:
+
+  CloudXUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Ref UserName
+      Groups:
+        - !Ref GroupName
+
+  CloudXUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    DependsOn: CloudXUser
+    Properties:
+      UserName: !Ref UserName
+
+  CloudXUserAccessKeySecret:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /hc/cloudX/${UserName}/CloudXUserAccessKeySecret
+      Type: String
+      Value: !GetAtt CloudXUserAccessKey.SecretAccessKey
+
+  CloudXUserAccessKeyId:  
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /hc/cloudX/${UserName}/CloudXUserAccessKeyId
+      Type: String
+      Value: !Ref CloudXUserAccessKey

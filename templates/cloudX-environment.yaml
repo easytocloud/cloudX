@@ -1,0 +1,165 @@
+Parameters:
+
+  Subnet:
+    Type: AWS::EC2::Subnet::Id
+    Default: subnet-ec45fcb5
+
+  AbacTag:
+    Type: String
+    Default: "ez2:security:vscodeuser"
+
+  GroupName:
+    Type: String
+    Default: cloudX
+
+Resources:
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - AWSCloud9SSMAccessRole
+
+  ProfileName:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /easytocloud/cloudX/InstanceProfileName
+      Type: String
+      Value: !Ref EC2InstanceProfile
+
+  SubnetParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /easytocloud/cloudX/Subnet
+      Type: String
+      Value: !Ref Subnet
+
+  AbacTagParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /easytocloud/cloudX/AbacTag
+      Type: String
+      Value: !Ref AbacTag
+
+  GroupNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /easytocloud/cloudX/GroupName
+      Type: String
+      Value: !Ref GroupName
+
+  VSCodeConnectGroup:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: !Ref GroupName
+      ManagedPolicyArns:
+      - !Ref VSCodeConnectPolicy
+      - !Ref AKSKRotationPolicy
+
+  VSCodeConnectPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Permissions for group VSCodeConnectors
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement" : [
+            {
+              "Sid": "GetStatusWithSSM1",
+              "Effect": "Allow",
+              "Action": "ssm:DescribeInstanceInformation",
+              "Resource": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*",
+              "Condition": {
+                "StringLike" : {
+                  "aws:ResourceTag/${AbacTag}" : "${!aws:username}"
+                }
+              }
+            },
+            {
+              "Sid": "GetStatusWithSSM2",
+              "Effect": "Allow",
+              "Action": "ssm:DescribeInstanceInformation",
+              "Resource": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:*"
+            },
+            {
+              "Sid": "StartEc2",
+              "Effect": "Allow",
+              "Action": "ec2:StartInstances",
+              "Resource": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*",
+              "Condition": {
+                "StringLike" : {
+                  "aws:ResourceTag/${AbacTag}" : "${!aws:username}"
+                }
+              }
+            },
+            {
+              "Sid": "SendCommandToInstance1",
+              "Effect": "Allow",
+              "Action": "ssm:SendCommand",
+              "Resource": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*",
+              "Condition": {
+                "StringLike" : {
+                  "aws:ResourceTag/${AbacTag}" : "${!aws:username}"
+                }
+              }
+            },
+            {
+              "Sid": "SendCommandToInstance2",
+              "Effect": "Allow",
+              "Action": "ssm:SendCommand",
+              "Resource": "arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript"
+            },
+            {
+              "Sid": "StartSession1",
+              "Effect": "Allow",
+              "Action": "ssm:StartSession",
+              "Resource": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*",
+              "Condition": {
+                "StringLike" : {
+                  "aws:ResourceTag/${AbacTag}" : "${!aws:username}"
+                }
+              }
+            },
+            {
+              "Sid": "StartSession2",
+              "Effect": "Allow",
+              "Action": "ssm:StartSession",
+              "Resource": "arn:aws:ssm:${AWS::Region}::document/AWS-StartSSHSession"
+            },
+            {
+              "Sid": "AllowSendPubKey",
+              "Effect": "Allow",
+              "Action" : [
+                "ec2-instance-connect:SendSSHPublicKey"
+              ],
+              "Resource": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*",
+              "Condition": {
+                "StringLike" : {
+                  "aws:ResourceTag/${AbacTag}" : "${!aws:username}"
+                }
+              }
+            },
+            {
+              "Sid": "AllowGetSSMParameters",
+              "Effect": "Allow",
+              "Action" : "ssm:GetParameters",
+              "Resource": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/easytocloud/cloudX/${!aws:username}/*"
+            }
+          ]
+        }
+
+  AKSKRotationPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      Description: Permission to rotate AKSK
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AllowAKSKRotation
+          Effect: Allow
+          Action:
+          - iam:CreateAccessKey
+          - iam:DeleteAccessKey
+          - iam:ListAccessKeys
+          - iam:UpdateAccessKey
+          Resource: ["arn:aws:iam::*:user/${aws:username}"]

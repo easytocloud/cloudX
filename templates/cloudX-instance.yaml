@@ -1,0 +1,42 @@
+Parameters:
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+
+  InstanceProfileName:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /easytocloud/cloudX/InstanceProfileName
+
+  Subnet:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Subnet::Id>
+    Default: /easytocloud/cloudX/Subnet
+
+  AbacTag:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /easytocloud/cloudX/AbacTag
+
+  UserName:
+    Type: String
+    Default: cloudXuser
+
+Resources:
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.large
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/easytocloud/cloudX/HEAD/install.sh)"
+          
+      IamInstanceProfile: !Ref InstanceProfileName
+      SubnetId: !Ref Subnet
+      Tags:
+        - Key: Name
+          Value: !Sub "cloudX-for-${UserName}-${AWS::StackName}"
+        - Key: !Ref AbacTag
+          Value: !Ref UserName
+
+      
