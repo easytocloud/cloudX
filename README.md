@@ -174,7 +174,8 @@ Also, increase the timeout for the SSH connection to 90 seconds.
 When the cloudX instance is not running, it needs to be started which takes more time than the default timeout allows for.
 
 To achive the configuration changes mentioned above, change the following parameters:
-``````
+
+```
 Remote.SSH: Config File         ~/.ssh/vscode/config
 Remote.SSH: Connect Timeout     90
 ```
@@ -186,5 +187,10 @@ This lists all settings for the plugin.
 
 ## Local Windows setup
 
-Should you be using Windows, the proxy script needs to be rewritten as a powershell script that needs to be allowed/trusted to run.
-Also, configuration file paths differ, at the very least in the path separator.
+Getting this setup to work with a local Windows system, requires a few tweaks compared with the setup for Unix based systems described above.
+
+The proxy script needs to be rewritten as a powershell script that needs to be allowed/trusted to run. 
+Use the cloudx-proxy.ps1 script in the Windows folder for that.
+It also shows (in comment at the bottom) how to integrate it in a Windows ssh config file.
+
+Also, keep in mind configuration file paths differ; at the very least in the path separator.
