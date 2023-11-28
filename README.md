@@ -13,31 +13,32 @@ We do however prefer to use Amazon Linux 2023 and as we don't use the Cloud9 Web
 
 cloudX combines the use of VSCode frontend with Amamzon Linux 2023 backend, using the (OS) features we love from Cloud9 without the actual Cloud9 IDE.
 
-## Cloud Components
+## cloudX Components
 
 cloudX consists of cloudformation templates that are to be deployed in your AWS account; one for the 'infrastructure' and one for each 'backend instance'
 
-### CloudX infrastructure
+### cloudX infrastructure
 
 This template creates the IAM resources used with cloudX. It stores settings in the parameter store to 'document' the infrastructure.
 
-### CloudX instance
+### cloudX instance
 
 This template (that can be added to Service Catalog for self-service purposes) installs an EC2 instance with all relevant software to function as a VSCode backend.
-You can connect to this instance using SSM. The role the instance needs for that is defined in CloudX infrastructure and automatically attached to the instance.
+You can connect to this instance using SSM. The role the instance needs for that is defined in cloudX infrastructure and automatically attached to the instance.
 
-### Optional CloudX user
+### cloudX user [optional]
 
 To connect to the instance, the user is required to have certain permissions. These permissions see to starting, stopping and connecting to the instance using SSM.
 You can either rely on these permissions from your current authentication and authorization (IAM, SSO) or you can create a new dedicated IAM user for each cloudX user.
-When this 'dedicated user' is member of the group that is created with CloudX infrastructure, the user will have exactely the required permissions.
+When this 'dedicated user' is member of the group that is created with cloudX infrastructure, the user will have exactely the required permissions.
 
-For the permissions to work, make sure you deploy the CloudX instance with the IAM username in the 'security tag' of the instance.
-The name of the 'security tag' is defined as part of the CloudX infrastructure.
+For the permissions to work, make sure you deploy the cloudX instance with the IAM username in the 'security tag' of the instance.
+The name of the 'security tag' is defined as part of the cloudX infrastructure.
 
 ### EC2 UserData
 
-The instance deployed as CloudX instance will run the install.sh in this repository to install all relevant software in the instance.
+The instance deployed as cloudX instance, uses UserData to run the install.sh in this repository.
+install.sh installs all relevant software in the instance.
 
 ## Local Components
 
@@ -51,41 +52,51 @@ You need to have
 - AWS CLI v2
 - AWS SSM Plugin
 - SSH client
-- Visual Studio Code
+- easytocloud cloudX
+- Microsoft Visual Studio Code
 
 Make sure to use version 2 of AWS CLI on your local device. 
 Installation instructions can be found here: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
 
 To be able to initiate an SSM session, your local device has to have the Session Manager plugin installed.
-
 Please refer to https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html
 for installing the SSM plugin on your local device.
 
 Should your OS not come with an ssh client, make sure to use an OpenSSL-based version.
 Windows users, please follow instructions here: https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse?tabs=gui
 
+As initial development for cloudX was on Mac OS, installation uses brew.
+```
+$ brew tap easytocloud/tap
+$ brew install easytocloud/tap/cloudx
+```
+Brew is also available for other platforms than Mac OS. Checkout https://brew.sh for more information.
 
-### Local AWS CLI config
+And last but not least, you need Visual Studio Code. You can download it from https://code.visualstudio.com/download
+
+
+### Local aws cli configuration
 
 At AWS level, you have to be able to connect and start/stop the instance. 
-For that, you need a configured AWS cli on your local device
+For that, you need a configured aws cli on your local device
 with a profile that can be used to operate on the instance.
 
-For this profile you can optionally use the Access Key and Secret Key from the above mentioned cloudX user.
+For this profile you can use the Access Key and Secret Key from the above mentioned cloudX user, 
+or any other AK/SK with sufficient permissions.
 
-### Local ssh config file
+### Local ssh configuration
 
 On your local machine, you need to setup ssh to connect to the instance, before you can use VSCode Remote development.
 
 Once the instance is running, you'll be using ssh to connect.
 The instance however, is created without an SSH key configuration.
 
-So, we need an ssh key-pair to be configured for use with this instance. 
+An ssh key-pair needs to be configured for use with this instance. 
 
 You can create the key-pair in the AWS console or create it locally on your device.
 See your ssh instructions for generating a key-pair locally or AWS documentation to do so on the AWS console.
 
-The public key will be pushed to the instance using your profile credentials.
+The public key will be pushed to the instance using your AWS profile credentials.
 The private keys stays on your local device.
 
 It all comes together in your ssh config file. 
@@ -111,15 +122,10 @@ then a login attempt is made as ec2-user using the key-pair indicated by Identit
 
 Note that the i-<something> in HostName refers to the EC2 instanceId of your cloudX instance.
 
-The heavy-lifting is done by cloudX-proxy.sh, installed as part of this product:
-
+The heavy-lifting is done by cloudX-proxy.sh.
 ```
-$ brew tap easytocloud/tap
-$ brew install easytocloud/tap/cloudx
-```
-
 cloudX-proxy.sh \<hostname\> \<portnumber\> \<environment\:standard\> <profile\:vscode> <pubkey\:~/.ssh/vscode/vscode.pub> <region\:profile-region>
-
+```
 hostname and portnumber are mandatory parameters.
 
 All parameters are positional, that is the 4th parameter has to be a profile name.
@@ -165,7 +171,7 @@ ssh vscode-one
 When you can succesfully login to your cloudX instance from the commandline,
 this can be integrated in Visual Studio Code.
 
-### Visual Studio Code
+### Local Visual Studio Code configuration
 
 In VS Code make sure the plugin 'Remote Development' by Microsoft is installed.
 
@@ -187,7 +193,7 @@ This lists all settings for the plugin.
 
 ## Local Windows setup
 
-Getting this setup to work with a local Windows system, requires a few tweaks compared with the setup for Unix based systems described above.
+Getting this setup to work with a local Windows system, requires a few tweaks compared to the setup for Unix based systems described above.
 
 The proxy script needs to be rewritten as a powershell script that needs to be allowed/trusted to run. 
 Use the cloudx-proxy.ps1 script in the Windows folder for that.

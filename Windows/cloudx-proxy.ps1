@@ -1,6 +1,9 @@
 # Derived from Easytocloud: https://github.com/easytocloud/cloudX
 # Example to test in DOS commmand prompt:
 # 	powershell.exe  -ExecutionPolicy Unrestricted "%USERPROFILE%\vscode\cloudx-proxy.ps1 i-xxxxxxxxxxxxx 22 standard cloudx-profile $HOME\vscode\cloudx-key.pub"
+#
+# Andries Krijtenburg, 2023
+
 $MAX_ITERATION = 30
 $SLEEP_DURATION = 3
 
