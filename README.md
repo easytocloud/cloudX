@@ -200,3 +200,5 @@ Use the cloudx-proxy.ps1 script in the Windows folder for that.
 It also shows (in comment at the bottom) how to integrate it in a Windows ssh config file.
 
 Also, keep in mind configuration file paths differ; at the very least in the path separator.
+
+Many thanks to Andries Krijtenburg for getting cloudX to work with Windows.
