@@ -201,7 +201,7 @@ sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/sshd
 # ## ADDITIONAL SOFTWARE - MANDATORY - SYSTEM LEVEL ##
 
 yum update -y
-yum install -y git jq util-linux-user
+yum install -y git jq util-linux-user ruby gem ruby-devel
 sleep 5
 yum groupinstall -y 'Development Tools'
 sleep 5
