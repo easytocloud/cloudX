@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudX - Deploy CloudX Environment and Create Service Catalog Products
+
+Parameters:
+  Subnet:
+    Type: AWS::EC2::Subnet::Id
+    Description: The subnet ID where the CloudX environment will be deployed
+
+  AbacTag:
+    Type: String
+    Default: "ez2:security:vscodeuser"
+    Description: The ABAC tag to use for resource access control
+
+  GroupName:
+    Type: String
+    Default: cloudX
+    Description: The name of the IAM group for CloudX users
+
+Resources:
+  CloudXEnvironment:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: https://easytocloudx.s3.amazonaws.com/cloudX-environment.yaml
+      Parameters:
+        Subnet: !Ref Subnet
+        AbacTag: !Ref AbacTag
+        GroupName: !Ref GroupName
+
+  CloudXUserProduct:
+    Type: AWS::ServiceCatalog::CloudFormationProduct
+    Properties:
+      Name: CloudX User
+      Description: Deploy a CloudX User
+      Owner: CloudX Team
+      ProvisioningArtifactParameters:
+        - Name: v1.0
+          Description: Initial version
+          Info:
+            LoadTemplateFromURL: https://easytocloudx.s3.amazonaws.com/cloudX-user.yaml
+
+  CloudXInstanceProduct:
+    Type: AWS::ServiceCatalog::CloudFormationProduct
+    Properties:
+      Name: CloudX Instance
+      Description: Deploy a CloudX Instance
+      Owner: CloudX Team
+      ProvisioningArtifactParameters:
+        - Name: v1.0
+          Description: Initial version
+          Info:
+            LoadTemplateFromURL: https://easytocloudx.s3.amazonaws.com/cloudX-instance.yaml
+
+  CloudXPortfolio:
+    Type: AWS::ServiceCatalog::Portfolio
+    Properties:
+      DisplayName: CloudX Portfolio
+      Description: Portfolio containing CloudX products
+      ProviderName: CloudX Team
+
+  CloudXUserProductAssociation:
+    Type: AWS::ServiceCatalog::PortfolioProductAssociation
+    Properties:
+      PortfolioId: !Ref CloudXPortfolio
+      ProductId: !Ref CloudXUserProduct
+
+  CloudXInstanceProductAssociation:
+    Type: AWS::ServiceCatalog::PortfolioProductAssociation
+    Properties:
+      PortfolioId: !Ref CloudXPortfolio
+      ProductId: !Ref CloudXInstanceProduct
+
+  AdministratorAccessPrincipalAssociation:
+    Type: AWS::ServiceCatalog::PortfolioPrincipalAssociation
+    Properties:
+      PortfolioId: !Ref CloudXPortfolio
+      PrincipalARN: !Sub arn:aws:iam::${AWS::AccountId}:role/AWSReservedSSO_AdministratorAccess_66a7b3c4a48bbcd6
+      PrincipalType: IAM
+
+Outputs:
+  CloudXEnvironmentStackId:
+    Description: The ID of the CloudX Environment Stack
+    Value: !Ref CloudXEnvironment
+
+  CloudXUserProductId:
+    Description: The ID of the CloudX User Service Catalog Product
+    Value: !Ref CloudXUserProduct
+
+  CloudXInstanceProductId:
+    Description: The ID of the CloudX Instance Service Catalog Product
+    Value: !Ref CloudXInstanceProduct
+
+  CloudXPortfolioId:
+    Description: The ID of the CloudX Portfolio
+    Value: !Ref CloudXPortfolio
