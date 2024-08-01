@@ -4,6 +4,7 @@ Setup an Amazon Linux 2023 EC2 instance as backend for VSCode.
 ## Introduction
 
 A standard way of working at easytocloud is to use Cloud9 for development.
+
 Cloud9 does have its limitations, especially in the IDE and in supporting more modern (versions of) packages and languages.
 Using VSCode as a frontend to a Cloud9 backend solves a lot of issues we had with the Cloud9 IDE.
 Updating Cloud9 so it uses AWS cli version 2 and python3 is one approach we have used to solve the out-dated software issues.

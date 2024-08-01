@@ -23,28 +23,28 @@ Resources:
   ProfileName:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /easytocloud/cloudX/InstanceProfileName
+      Name: /cloudX/InstanceProfileName
       Type: String
       Value: !Ref EC2InstanceProfile
 
   SubnetParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /easytocloud/cloudX/Subnet
+      Name: /cloudX/Subnet
       Type: String
       Value: !Ref Subnet
 
   AbacTagParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /easytocloud/cloudX/AbacTag
+      Name: /cloudX/AbacTag
       Type: String
       Value: !Ref AbacTag
 
   GroupNameParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /easytocloud/cloudX/GroupName
+      Name: /cloudX/GroupName
       Type: String
       Value: !Ref GroupName
 

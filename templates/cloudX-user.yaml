@@ -10,7 +10,7 @@ Parameters:
 
   GroupName:
     Type: AWS::SSM::Parameter::Value<String>
-    Default: /hc/cloudX/GroupName
+    Default: /cloudX/GroupName
 
 Resources:
 
@@ -30,13 +30,13 @@ Resources:
   CloudXUserAccessKeySecret:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /hc/cloudX/${UserName}/CloudXUserAccessKeySecret
+      Name: !Sub /cloudX/${UserName}/CloudXUserAccessKeySecret
       Type: String
       Value: !GetAtt CloudXUserAccessKey.SecretAccessKey
 
   CloudXUserAccessKeyId:  
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /hc/cloudX/${UserName}/CloudXUserAccessKeyId
+      Name: !Sub /cloudX/${UserName}/CloudXUserAccessKeyId
       Type: String
       Value: !Ref CloudXUserAccessKey
