@@ -434,7 +434,7 @@ install_zsh_stack() {
 install_sso_tools() {
     if ! $install_sso; then
         return
-    fi\n\
+    fi
 
     if ! command -v generate-sso-config &> /dev/null; then
         echo "Installing SSO tools..."
