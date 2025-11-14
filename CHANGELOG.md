@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.4](https://github.com/easytocloud/cloudX/compare/v1.1.3...v1.1.4) (2025-11-14)
+
+
+### Bug Fixes
+
+* syntax zshrc update ([1336f72](https://github.com/easytocloud/cloudX/commit/1336f728bc31e3b32ccb32b7dd064144a8b9525c))
+
 ## [1.1.3](https://github.com/easytocloud/cloudX/compare/v1.1.2...v1.1.3) (2025-11-14)
 
 
