@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1](https://github.com/easytocloud/cloudX/compare/v1.1.0...v1.1.1) (2025-11-14)
+
+
+### Bug Fixes
+
+* improve ec2cloudx.sh and use it in instance ([15b5912](https://github.com/easytocloud/cloudX/commit/15b59121d88de84fd88b7b16bdeb246c1c2dc690))
+
 ## [1.1.0](https://github.com/easytocloud/cloudX/compare/v1.0.0...v1.1.0) (2025-11-14)
 
 
