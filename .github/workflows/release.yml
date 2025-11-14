@@ -1,14 +1,48 @@
 # .github/workflows/release.yml
-# Start Homebrew Releaser when a new tag is created
+# Start Homebrew Releaser and publish templates to S3 when a new tag is created
 on:
   push:
     tags:
       - "*"
 
 jobs:
+  publish-templates:
+    runs-on: ubuntu-latest
+    name: publish-cloudformation-templates
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure 1Password Service Account
+        uses: 1password/load-secrets-action/configure@v1
+        with:
+          service-account-token: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+
+      - name: Load AWS credentials
+        id: load-aws-credentials
+        uses: 1password/load-secrets-action@v1
+        with:
+          export-env: false
+        env:
+          AWS_ACCESS_KEY_ID: op://CICD/aws-cloudx-publisher/access-key-id
+          AWS_SECRET_ACCESS_KEY: op://CICD/aws-cloudx-publisher/secret-access-key
+          AWS_REGION: op://CICD/aws-cloudx-publisher/region
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ steps.load-aws-credentials.outputs.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ steps.load-aws-credentials.outputs.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ steps.load-aws-credentials.outputs.AWS_REGION }}
+
+      - name: Publish templates to S3
+        run: |
+          aws s3 sync templates/ s3://cloudx-public/templates/ --delete
+          echo "Templates published to s3://cloudx-public/templates/"
+
   homebrew-releaser:
     runs-on: ubuntu-latest
     name: homebrew-releaser
+    needs: publish-templates
     steps:
       - uses: actions/checkout@v3
 

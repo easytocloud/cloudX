@@ -1,204 +1,129 @@
 # cloudX
-Setup an Amazon Linux 2023 EC2 instance as backend for VSCode.
+
+AWS CloudFormation templates for setting up Amazon Linux 2023 EC2 instances as remote development backends for VSCode.
 
 ## Introduction
 
-A standard way of working at easytocloud is to use Cloud9 for development.
-Cloud9 does have its limitations, especially in the IDE and in supporting more modern (versions of) packages and languages.
-Using VSCode as a frontend to a Cloud9 backend solves a lot of issues we had with the Cloud9 IDE.
-Updating Cloud9 so it uses AWS cli version 2 and python3 is one approach we have used to solve the out-dated software issues.
+cloudX is a worthy successor to AWS Cloud9, providing a modern remote development environment using VSCode with Amazon Linux 2023. With Cloud9 no longer available for new customers, cloudX offers a flexible alternative for cloud-based development.
 
-Cloud9 is based on Amazon Linux 2 or Ubuntu Linux.
-We do however prefer to use Amazon Linux 2023 and as we don't use the Cloud9 Web IDE anymore.
+**This repository contains the AWS-side CloudFormation templates.** For client-side setup (SSH configuration and proxy management), see the [cloudX-proxy](https://github.com/easytocloud/cloudX-proxy) repository.
 
-cloudX combines the use of VSCode frontend with Amamzon Linux 2023 backend, using the (OS) features we love from Cloud9 without the actual Cloud9 IDE.
+## Quick Deploy
 
-## cloudX Components
+Deploy the CloudFormation templates directly to your AWS account:
 
-cloudX consists of cloudformation templates that are to be deployed in your AWS account; one for the 'infrastructure' and one for each 'backend instance'
+### 1. Environment Setup (Required - Deploy Once)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-environment&templateURL=https://s3.amazonaws.com/cloudx-public/templates/cloudX-environment.yaml)
 
-### cloudX infrastructure
+Creates IAM resources and stores configuration in Parameter Store.
 
-This template creates the IAM resources used with cloudX. It stores settings in the parameter store to 'document' the infrastructure.
+### 2. Instance Deployment (Required - Per Developer)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-instance&templateURL=https://s3.amazonaws.com/cloudx-public/templates/cloudX-instance.yaml)
 
-### cloudX instance
+Deploys an EC2 instance with development tools configured via UserData.
 
-This template (that can be added to Service Catalog for self-service purposes) installs an EC2 instance with all relevant software to function as a VSCode backend.
-You can connect to this instance using SSM. The role the instance needs for that is defined in cloudX infrastructure and automatically attached to the instance.
+### 3. User Setup (Optional - Per Developer)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-user&templateURL=https://s3.amazonaws.com/cloudx-public/templates/cloudX-user.yaml)
 
-### cloudX user [optional]
+Creates a dedicated IAM user with access keys for instance management.
 
-To connect to the instance, the user is required to have certain permissions. These permissions see to starting, stopping and connecting to the instance using SSM.
-You can either rely on these permissions from your current authentication and authorization (IAM, SSO) or you can create a new dedicated IAM user for each cloudX user.
-When this 'dedicated user' is member of the group that is created with cloudX infrastructure, the user will have exactely the required permissions.
+## CloudFormation Templates
 
-For the permissions to work, make sure you deploy the cloudX instance with the IAM username in the 'security tag' of the instance.
-The name of the 'security tag' is defined as part of the cloudX infrastructure.
+### cloudX-environment.yaml
 
-### EC2 UserData
+**Deploy this template first (once per AWS account/region).**
 
-The instance deployed as cloudX instance, uses UserData to run the install.sh in this repository.
-install.sh installs all relevant software in the instance.
+Creates the core infrastructure:
+- IAM instance profile with SSM access
+- Parameter Store configuration for subnet, ABAC tag, and group settings
+- IAM group for cloudX users with permissions to start, stop, and connect to instances
 
-## Local Components
+Parameters:
+- `Subnet`: The VPC subnet ID where instances will be deployed
+- `AbacTag`: The tag key used for attribute-based access control (default: `ez2:security:vscodeuser`)
+- `GroupName`: Name for the IAM group (default: `cloudX`)
 
-NOTE: This document describes steps for Unix-like operating systems. For Windows users, 
-please refer to the bottom of this document for differences when using Windows.
+### cloudX-instance.yaml
 
-Your local device will use SSM and SSH to connect to your cloudX instance. 
+**Deploy this template for each developer instance.**
 
-You need to have
+Creates an EC2 instance configured as a development backend:
+- Amazon Linux 2023 (latest AMI)
+- Instance type: t3.large
+- Automatic software installation via UserData (runs `install.sh`)
+- Tagged with username for ABAC permissions
+- SSM-enabled for secure connections
 
-- AWS CLI v2
-- AWS SSM Plugin
-- SSH client
-- easytocloud cloudX
-- Microsoft Visual Studio Code
+Parameters:
+- `UserName`: Username for instance tagging and identification (default: `cloudXuser`)
 
-Make sure to use version 2 of AWS CLI on your local device. 
-Installation instructions can be found here: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html
+The instance installs development tools automatically on first boot. Software selection can be controlled via EC2 instance tags (see `install.sh` for available options).
 
-To be able to initiate an SSM session, your local device has to have the Session Manager plugin installed.
-Please refer to https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html
-for installing the SSM plugin on your local device.
+### cloudX-user.yaml
 
-Should your OS not come with an ssh client, make sure to use an OpenSSL-based version.
-Windows users, please follow instructions here: https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_install_firstuse?tabs=gui
+**Optional: Deploy for each developer if dedicated IAM credentials are needed.**
 
-As initial development for cloudX was on Mac OS, installation uses brew.
-```
-$ brew tap easytocloud/tap
-$ brew install easytocloud/tap/cloudx
-```
-Brew is also available for other platforms than Mac OS. Checkout https://brew.sh for more information.
+Creates a dedicated IAM user:
+- Member of the cloudX group (with instance management permissions)
+- Access key automatically generated and stored in Parameter Store
+- Credentials available at: `/hc/cloudX/{UserName}/CloudXUserAccessKey*`
 
-And last but not least, you need Visual Studio Code. You can download it from https://code.visualstudio.com/download
+Parameters:
+- `UserName`: The IAM username to create (default: `cloudXuser`)
 
+**Note:** You can skip this template if developers already have appropriate IAM/SSO permissions.
 
-### Local aws cli configuration
+## Client-Side Setup
 
-At AWS level, you have to be able to connect and start/stop the instance. 
-For that, you need a configured aws cli on your local device
-with a profile that can be used to operate on the instance.
+For setting up your local machine to connect to cloudX instances, please refer to the **[cloudX-proxy](https://github.com/easytocloud/cloudX-proxy)** repository. It handles:
 
-For this profile you can use the Access Key and Secret Key from the above mentioned cloudX user, 
-or any other AK/SK with sufficient permissions.
+- SSH configuration and proxy management
+- Automatic instance startup via SSM
+- SSH key management and deployment
+- VSCode Remote Development integration
+- Support for both Unix-like systems and Windows
 
-### Local ssh configuration
+## Software Installation on Instances
 
-On your local machine, you need to setup ssh to connect to the instance, before you can use VSCode Remote development.
+The `install.sh` script (run automatically via UserData) supports various development tools. You can control which software gets installed by setting EC2 instance tags:
 
-Once the instance is running, you'll be using ssh to connect.
-The instance however, is created without an SSH key configuration.
+| Tag | Software | Notes |
+|-----|----------|-------|
+| `brew` | Homebrew | Package manager (implied by other brew-based tools) |
+| `direnv` | direnv | Environment variable manager |
+| `sso` | SSO Tools | AWS SSO integration tools |
+| `zsh` | Zsh + Oh My Zsh | Alternative shell with easytocloud theme |
+| `pip` | pip + Python tools | Python package manager |
+| `docker` | Docker | Container runtime |
+| `anaconda` | Anaconda | Python data science distribution |
+| `nvm` | Node Version Manager | Node.js version manager |
+| `privpage` | privpage | AWS CLI output privacy tool |
+| `fortools` | for-tools | Iteration tools for AWS operations |
+| `SSODomain` | (value) | Your AWS SSO domain for configuration |
 
-An ssh key-pair needs to be configured for use with this instance. 
+Set tag values to `true` to enable installation. Example: Tag key `zsh` with value `true` will install Zsh and Oh My Zsh.
 
-You can create the key-pair in the AWS console or create it locally on your device.
-See your ssh instructions for generating a key-pair locally or AWS documentation to do so on the AWS console.
+For more flexible installation on existing instances, see the `ec2cloudx.sh` script which supports command-line options.
 
-The public key will be pushed to the instance using your AWS profile credentials.
-The private keys stays on your local device.
-
-It all comes together in your ssh config file. 
-This documentation (and the software's defaults) assume you have a dedicated ssh config file for vscode connections in the directory ~/.ssh/vscode/
-This file can be included from your ~/.ssh/config as follows:
-
-```
-Include vscode/config
-```
-
-and then in vscode/config
+## Repository Contents
 
 ```
-Host vscode-one
-    ProxyCommand cloudX-proxy.sh %h %p
-    User ec2-user
-    IdentityFile ~/.ssh/vscode/vscode.pub
-    HostName i-<something>
+.
+├── templates/
+│   ├── cloudX-environment.yaml    # Environment setup (deploy once)
+│   ├── cloudX-instance.yaml       # Instance template (per developer)
+│   └── cloudX-user.yaml           # Optional IAM user creation
+├── install.sh                     # UserData installation script
+├── ec2cloudx.sh                   # Enhanced installation script with CLI options
+└── distribution/bin/              # Legacy proxy scripts (see note below)
 ```
 
-Whenever an ssh connection is made to the host vscode-one, first the ProxyCommand will be run to connect to the host
-then a login attempt is made as ec2-user using the key-pair indicated by IdentityFile.
+## Contributing
 
-Note that the i-<something> in HostName refers to the EC2 instanceId of your cloudX instance.
+Issues and pull requests are welcome. For client-side proxy functionality, please contribute to the [cloudX-proxy](https://github.com/easytocloud/cloudX-proxy) repository instead.
 
-The heavy-lifting is done by cloudX-proxy.sh.
-```
-cloudX-proxy.sh \<hostname\> \<portnumber\> \<environment\:standard\> <profile\:vscode> <pubkey\:~/.ssh/vscode/vscode.pub> <region\:profile-region>
-```
-hostname and portnumber are mandatory parameters.
+---
 
-All parameters are positional, that is the 4th parameter has to be a profile name.
-When ommitted, the values are as indicated after the ':'.
+### Legacy Note
 
-The proxy uses the indicated AWS profile to connect to the instance, start it if necessary, and use SSM to setup an ssh tunnel.
-When no other parameters than hostname and portnumber are given, the profile it uses is the profile 'vscode' in your ~/.aws/credentials file.
-When your use easytocloud's AWS profile organizer, you can have multiple 'environments' each with their own config and credentials file.
-Parameter 3 refers to easytocloud's AWS profile organizer environment; use 'standard' if the standard files should be used or you do not use profile organizer.
-
-Should you want to use different keys per cloudX instance, provide the name of the key as parameter 5.
-
-The region to look for the instance should be part of the profile, but if so desired can be overruled in parameter 6
-
-A more advanced example:
-
-```
-Host vscode-one
-    ProxyCommand cloudX-proxy.sh %h %p standard labs_profile ~/.ssh/easytocloud/dev.pub
-    User ec2-user
-    IdentityFile ~/.ssh/easytocloud/dev.pub
-    HostName i-<something>
-
-```
-
-or with use of AWS Profile Organizer:
-
-```
-Host vscode-one
-    ProxyCommand cloudX-proxy.sh %h %p easytocloud labs
-    User ec2-user
-    IdentityFile ~/.ssh/vscode/vscode.pub
-    HostName i-<something>
-
-```
-
-To connect to the host from the local device, just type:
-
-```
-ssh vscode-one
-```
-
-When you can succesfully login to your cloudX instance from the commandline,
-this can be integrated in Visual Studio Code.
-
-### Local Visual Studio Code configuration
-
-In VS Code make sure the plugin 'Remote Development' by Microsoft is installed.
-
-Change the configuration for Remote SSH to use the ssh configuration file created in the above steps.
-Also, increase the timeout for the SSH connection to 90 seconds. 
-When the cloudX instance is not running, it needs to be started which takes more time than the default timeout allows for.
-
-To achive the configuration changes mentioned above, change the following parameters:
-
-```
-Remote.SSH: Config File         ~/.ssh/vscode/config
-Remote.SSH: Connect Timeout     90
-```
-
-To change parameters in VS code, click the gear at the bottom-left --> Settings. 
-Then in the search-bar at the top enter 'remote.ssh'. 
-This lists all settings for the plugin.
-
-
-## Local Windows setup
-
-Getting this setup to work with a local Windows system, requires a few tweaks compared to the setup for Unix based systems described above.
-
-The proxy script needs to be rewritten as a powershell script that needs to be allowed/trusted to run. 
-Use the cloudx-proxy.ps1 script in the Windows folder for that.
-It also shows (in comment at the bottom) how to integrate it in a Windows ssh config file.
-
-Also, keep in mind configuration file paths differ; at the very least in the path separator.
-
-Many thanks to Andries Krijtenburg for getting cloudX to work with Windows.
+The `distribution/bin/cloudX-proxy.sh` and `Windows/cloudx-proxy.ps1` scripts in this repository are maintained for compatibility but have been superseded by the dedicated **[cloudX-proxy](https://github.com/easytocloud/cloudX-proxy)** tool, which provides improved SSH proxy management and configuration.
