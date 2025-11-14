@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.3](https://github.com/easytocloud/cloudX/compare/v1.1.2...v1.1.3) (2025-11-14)
+
+
+### Bug Fixes
+
+* syntaxt error in generated script ([ee7b590](https://github.com/easytocloud/cloudX/commit/ee7b5901f37724d7badf0aebb7fcc46a1f0786e6))
+
 ## [1.1.2](https://github.com/easytocloud/cloudX/compare/v1.1.1...v1.1.2) (2025-11-14)
 
 
