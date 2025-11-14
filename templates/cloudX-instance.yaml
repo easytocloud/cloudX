@@ -161,7 +161,7 @@ Resources:
       UserData:
         Fn::Base64: |
           #!/bin/bash
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/easytocloud/cloudX/HEAD/install.sh)"
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/easytocloud/cloudX/HEAD/ec2cloudx.sh)"
 
       SecurityGroupIds:
         - !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SecurityGroup}}'
