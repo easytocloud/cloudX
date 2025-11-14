@@ -13,17 +13,17 @@ cloudX is a worthy successor to AWS Cloud9, providing a modern remote developmen
 Deploy the CloudFormation templates directly to your AWS account:
 
 ### 1. Environment Setup (Required - Once Per Environment)
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-environment&templateURL=https://s3.amazonaws.com/cloudx-public/templates/cloudX-environment.yaml)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-environment&templateURL=https://cloudx-public.s3.amazonaws.com/templates/cloudX-environment.yaml)
 
 Creates IAM resources, security groups, and stores environment configuration in Parameter Store.
 
 ### 2. Instance Deployment (Required - Per Developer Per Environment)
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-instance&templateURL=https://s3.amazonaws.com/cloudx-public/templates/cloudX-instance.yaml)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-instance&templateURL=https://cloudx-public.s3.amazonaws.com/templates/cloudX-instance.yaml)
 
 Deploys an EC2 instance with development tools configured via UserData.
 
 ### 3. User Setup (Optional - Per Developer Per Environment)
-[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-user&templateURL=https://s3.amazonaws.com/cloudx-public/templates/cloudX-user.yaml)
+[![Launch Stack](https://s3.amazonaws.com/cloudformation-examples/cloudformation-launch-stack.png)](https://console.aws.amazon.com/cloudformation/home#/stacks/new?stackName=cloudX-user&templateURL=https://cloudx-public.s3.amazonaws.com/templates/cloudX-user.yaml)
 
 Creates a dedicated IAM user with access keys for instance management.
 
