@@ -1,57 +1,219 @@
+Description : >
+  
+  This template creates the IAM resources and SSM parameters defining a cloudX environment. 
+  Users and Instances are created within an Environment.
+  Create multiple environments to separate cloudX resources, for instance to use different subnets/VPCs with different connectivity.
+ 
+Metadata:
+
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Configure your cloudX environment"
+        Parameters:
+          - EnvironmentName
+          - Subnet
+          - SSODomain
+          - AbacTag
+
+    ParameterLabels:
+      AbacTag:
+        default: "Name of the Instance Tag that identifies the user able to operate it"
+      EnvironmentName:
+        default: "Name of the cloudX environment (e.g. lab)"
+      Subnet:
+        default: "SubnetId for cloudX instances in existing VPC"
+      SSODomain:
+        default: "Domain for your AWS SSO Login page (e.g. mycompany.awsapps.com)"
+
 Parameters:
 
   Subnet:
     Type: AWS::EC2::Subnet::Id
-    Default: subnet-ec45fcb5
 
   AbacTag:
     Type: String
-    Default: "ez2:security:vscodeuser"
+    Default: "ez2:cloudx:user"
 
-  GroupName:
+  EnvironmentName:
     Type: String
-    Default: cloudX
+    Default: "OTA"
+
+  SSODomain:
+    Type: String
+    Default: "<my>.awsapps.com"
 
 Resources:
+
+  # Role with permissions the cloudX EC2 instances needs without a user logged in
+  EC2InstanceProfileRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AWSCloud9SSMInstanceProfile
+      - arn:aws:iam::aws:policy/AWSCodeArtifactReadOnlyAccess
+      - arn:aws:iam::aws:policy/AWSOrganizationsReadOnlyAccess
+      - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+      - arn:aws:iam::aws:policy/AWSCodeCommitReadOnly
+      Policies:
+      - PolicyName: CloudXProfilePolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - sts:GetServiceBearerToken
+            Resource: "*"
+          - Effect: Allow
+            Action:
+            - ec2:StartInstances
+            - ec2:StopInstances
+            - ec2:RebootInstances
+            - ec2:TerminateInstances
+            Resource: "*"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
-        - AWSCloud9SSMAccessRole
+        - !Ref EC2InstanceProfileRole
 
-  ProfileName:
+  EnvironmentParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /easytocloud/cloudX/InstanceProfileName
+      Name: !Sub /cloudX/${EnvironmentName}/Environment
+      Type: String
+      Value: !Ref EnvironmentName
+      Description: "Environment name for CloudX environment selection"
+
+  ProfileNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /cloudX/${EnvironmentName}/InstanceProfileName
       Type: String
       Value: !Ref EC2InstanceProfile
 
   SubnetParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /easytocloud/cloudX/Subnet
+      Name: !Sub /cloudX/${EnvironmentName}/Subnet
       Type: String
       Value: !Ref Subnet
 
   AbacTagParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /easytocloud/cloudX/AbacTag
+      Name: !Sub /cloudX/${EnvironmentName}/AbacTag
       Type: String
       Value: !Ref AbacTag
+
+  SecurityGroupParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /cloudX/${EnvironmentName}/SecurityGroup
+      Type: String
+      Value: !Ref SecurityGroup
+
+  SSODomainParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /cloudX/${EnvironmentName}/SSODomain
+      Type: String
+      Value: !Ref SSODomain
 
   GroupNameParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: /easytocloud/cloudX/GroupName
+      Name: !Sub /cloudX/${EnvironmentName}/IAMGroupName
       Type: String
-      Value: !Ref GroupName
+      Value: !Ref "cloudXGroup"
 
-  VSCodeConnectGroup:
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for VSCode connectors
+      VpcId: !GetAtt VPC.VPCId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+
+  VPC:
+    # custom resource to get the VPC that hosts the subnet
+    Type: Custom::VPCId
+    Properties:
+      ServiceToken: !GetAtt GetVPC.Arn
+      SubnetId: !Ref Subnet
+
+  GetVPC:
+    # custom resource to get the VPC that hosts the subnet python code
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.11   
+      Timeout: 30
+      Role: !GetAtt GetVPCRole.Arn
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+          import logging
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          def handler(event, context):
+              logger.info('Received event: %s', event)
+              try:
+                  subnet_id = event['ResourceProperties']['SubnetId']
+                  ec2 = boto3.resource('ec2')
+                  subnet = ec2.Subnet(subnet_id)
+                  vpc = ec2.Vpc(subnet.vpc_id)
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {'VPCId': vpc.id}, vpc.id)
+              except Exception as e:
+                  logger.error('Failed to process:', exc_info=True)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {}, None)
+  
+  GetVPCRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+      - PolicyName: GetVPCPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:DescribeSubnets
+            - ec2:DescribeVpcs
+            Resource: "*"
+
+  # Group for cloudX users with permission 
+  # - to start and connect to their instances via SSH cloudX proxy
+  # - to rotate their AKSK keys for their cloudX proxy profile
+  cloudXGroup:
     Type: AWS::IAM::Group
     Properties:
-      GroupName: !Ref GroupName
+      GroupName: !Sub cloudX-${EnvironmentName}-Group
       ManagedPolicyArns:
       - !Ref VSCodeConnectPolicy
       - !Ref AKSKRotationPolicy
@@ -59,7 +221,7 @@ Resources:
   VSCodeConnectPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: Permissions for group VSCodeConnectors
+      Description: "Permissions for cloudx-proxy to start and connect to cloudx user's EC2 instances"
       PolicyDocument: !Sub |
         {
           "Version": "2012-10-17",
@@ -93,23 +255,6 @@ Resources:
               }
             },
             {
-              "Sid": "SendCommandToInstance1",
-              "Effect": "Allow",
-              "Action": "ssm:SendCommand",
-              "Resource": "arn:aws:ec2:${AWS::Region}:${AWS::AccountId}:instance/*",
-              "Condition": {
-                "StringLike" : {
-                  "aws:ResourceTag/${AbacTag}" : "${!aws:username}"
-                }
-              }
-            },
-            {
-              "Sid": "SendCommandToInstance2",
-              "Effect": "Allow",
-              "Action": "ssm:SendCommand",
-              "Resource": "arn:aws:ssm:${AWS::Region}::document/AWS-RunShellScript"
-            },
-            {
               "Sid": "StartSession1",
               "Effect": "Allow",
               "Action": "ssm:StartSession",
@@ -138,12 +283,6 @@ Resources:
                   "aws:ResourceTag/${AbacTag}" : "${!aws:username}"
                 }
               }
-            },
-            {
-              "Sid": "AllowGetSSMParameters",
-              "Effect": "Allow",
-              "Action" : "ssm:GetParameters",
-              "Resource": "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/easytocloud/cloudX/${!aws:username}/*"
             }
           ]
         }

@@ -1,42 +1,203 @@
+Description: >
+  This template creates an EC2 instance for use with cloudX.
+ 
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: CloudX configuration
+        Parameters:
+          - UserName
+          - EnvironmentName
+          - InstanceType
+          - VolumeSize
+      - Label:
+          default: Recommended software packages to install
+        Parameters:
+          - UV
+          - BREW
+          - DIRENV  
+          - ZSH
+          - SSO
+      - Label:
+          default: Optional software packages to install
+        Parameters:
+          - NVM
+          - PIP
+          - DOCKER
+          - ANACONDA
+          - PRIVPAGE
+          - FORTOOLS
+    ParameterLabels:
+      UserName:
+        default: CloudX User name (without prefix)
+      EnvironmentName:
+        default: CloudX Environment name
+      InstanceType:
+        default: EC2 Instance type
+      BREW:
+        default: Homebrew (if not installed as dependency)
+      DIRENV:
+        default: direnv - to automatically change AWS profiles upon directory change
+      SSO:
+        default: SSO tools - to create .aws/config profiles for all roles you can assume
+      ZSH:
+        default: zsh with oh-my-easytocloud (oh-my-zsh theme)
+      NVM:
+        default: NVM package manager
+      PIP:
+        default: PIP package manager
+      PRIVPAGE:
+        default: AWS PAGER PrivPage
+      ANACONDA:
+        default: Anaconda
+      DOCKER:
+        default: Docker
+      FORTOOLS:
+        default: for-tools - a collection of tools to iterate over multiple AWS accounts
+      UV:
+        default: UV package manager - combine pip and venv in one extremely fast tool
+      
 Parameters:
-
-  LatestAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
-
-  InstanceProfileName:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /easytocloud/cloudX/InstanceProfileName
-
-  Subnet:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Subnet::Id>
-    Default: /easytocloud/cloudX/Subnet
-
-  AbacTag:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: /easytocloud/cloudX/AbacTag
-
   UserName:
     Type: String
-    Default: cloudXuser
+    Description: Name of the CloudX user to create the instance for (without prefix).
+    Default: ''
 
+  EnvironmentName:
+    Type: String
+    Default: 'OTA'
+    Description: 'Name of the CloudX environment'
+    
+
+  InstanceType:
+    Type: String
+    Description: The instance type to use.
+    Default: t3.large
+    AllowedValues: 
+      - 't3.large'
+      - 't3.xlarge'
+      - 't3.2xlarge'
+      - 't3a.large'
+      - 't3a.xlarge'
+      - 't3a.2xlarge'
+      - 'm5.xlarge'
+      - 'm5.2xlarge'
+
+  VolumeSize:
+    Type: Number
+    Description: The size of the root volume in GB.
+    Default: 16
+    MinValue: 10
+    MaxValue: 300
+
+  ZSH:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  DIRENV:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  DOCKER:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  NVM:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  UV:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  PIP:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  PRIVPAGE:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  ANACONDA:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+
+  BREW:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  SSO:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+
+  FORTOOLS:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+  
 Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: !Ref LatestAmiId
-      InstanceType: t3.large
+      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      InstanceType: !Ref InstanceType
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref VolumeSize
+            VolumeType: gp3
+            DeleteOnTermination: true
       UserData:
-        Fn::Base64: !Sub |
+        Fn::Base64: |
           #!/bin/bash
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/easytocloud/cloudX/HEAD/install.sh)"
-          
-      IamInstanceProfile: !Ref InstanceProfileName
-      SubnetId: !Ref Subnet
+
+      SecurityGroupIds:
+        - !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SecurityGroup}}'
+      
+      IamInstanceProfile: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/InstanceProfileName}}'
+
+      SubnetId: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/Subnet}}'
+      
       Tags:
         - Key: Name
-          Value: !Sub "cloudX-for-${UserName}-${AWS::StackName}"
-        - Key: !Ref AbacTag
-          Value: !Ref UserName
-
-      
+          Value: !Sub "cloudX for ${UserName}"
+        - Key: Environment
+          Value: !Sub "${EnvironmentName}"
+        - Key: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/AbacTag}}'
+          Value: !Sub "cloudX-${EnvironmentName}-${UserName}"
+        - Key: SSODomain
+          Value: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SSODomain}}'
+        - Key: zsh
+          Value: !Ref ZSH
+        - Key: direnv
+          Value: !Ref DIRENV
+        - Key: brew
+          Value: !Ref BREW
+        - Key: sso
+          Value: !Ref SSO
+        - Key: nvm
+          Value: !Ref NVM
+        - Key: pip
+          Value: !Ref PIP
+        - Key: privpage
+          Value: !Ref PRIVPAGE
+        - Key: anaconda
+          Value: !Ref ANACONDA
+        - Key: docker
+          Value: !Ref DOCKER
+        - Key: fortools
+          Value: !Ref FORTOOLS
+        - Key: uv
+          Value: !Ref UV
