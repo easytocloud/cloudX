@@ -564,7 +564,7 @@ update_zshrc() {
     append_unique_line "$zshrc" 'eval "$(direnv hook zsh)"'
 
     if $install_sso; then
-        append_unique_line "$bashrc" 'test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run uvx sso-config-generator to configure AWS CLI **\n\n"'
+        append_unique_line "$zshrc" 'test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run uvx sso-config-generator to configure AWS CLI **\n\n"'
     fi
 
     if $install_anaconda; then
