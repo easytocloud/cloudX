@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "cloudX",
+			"path": "."
+		},
+		{
+			"name": "cloudX-proxy",
+			"path": "../../PyPI/cloudX-proxy"
+		},
+		{
+			"name": "sso-config-generator",
+			"path": "../../PyPI/sso-config-generator"
+		},
+		{
+			"name": "easytocloud.github.io",
+			"path": "../../GitHub/easytocloud.github.io"
+		}
+	],
+	"settings": {}
+}
