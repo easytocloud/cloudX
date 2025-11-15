@@ -153,9 +153,9 @@ Resources:
                 fi
             02PrepareWorkspace:
               command: |
-                mkdir -p /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws
+                mkdir -p /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.config/direnv/lib
                 touch /home/ec2-user/.install-running
-                chown -R ec2-user:ec2-user /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.install-running
+                chown -R ec2-user:ec2-user /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.config /home/ec2-user/.install-running
         10_autoshutdown:
           files:
             /home/ec2-user/.cloudX/autoshutdown-configuration:
@@ -528,6 +528,169 @@ Resources:
               owner: ec2-user
               group: ec2-user
               mode: '000600'
+            /home/ec2-user/.config/direnv/lib/layouts.sh:
+              content: |
+                #! /usr/bin/env bash
+
+                layout_codeartifact() {
+
+                    local usage="usage: layout uv [pip] [publish] [uv] [domain=<domain>] [owner=<owner>] [region=<region>] [repo=<repo>] [profile=<profile>]"
+
+                    local enable_pip=false
+                    local enable_publish=false
+                    local enable_uv=false
+                    local modes_explicit=false
+
+                    for arg in "$@"; do
+                        case "$arg" in
+                            pip)
+                                enable_pip=true
+                                modes_explicit=true
+                                ;;
+                            publish)
+                                enable_publish=true
+                                modes_explicit=true
+                                ;;
+                            uv)
+                                enable_uv=true
+                                modes_explicit=true
+                                ;;
+                            domain=*)
+                                domain=${arg#domain=}
+                                ;;
+                            owner=*)
+                                owner=${arg#owner=}
+                                ;;
+                            region=*)
+                                region=${arg#region=}
+                                ;;
+                            repo=*)
+                                repo=${arg#repo=}
+                                ;;
+                            profile=*)
+                                profile=${arg#profile=}
+                                ;;
+                            -h|--help|help)
+                                echo "$usage"
+                                return 0
+                                ;;
+                            *)
+                                log_error "Unknown argument: $arg"
+                                echo "$usage"
+                                return 1
+                                ;;
+                        esac
+                    done
+
+                    if [[ $modes_explicit == false ]]; then
+                        enable_pip=true
+                        enable_publish=true
+                        enable_uv=true
+                    fi
+
+                    local profile_args=()
+                    if [[ -n $profile ]]; then
+                        profile_args=(--profile "$profile")
+                    fi
+
+                    local host="${domain}-${owner}.d.codeartifact.${region}.amazonaws.com"
+                    local repo_base="https://${host}/pypi/${repo}"
+
+                    local token=""
+                    if [[ $enable_uv == true || $enable_publish == true ]]; then
+                        if ! token=$(aws codeartifact get-authorization-token \
+                                --domain "$domain" \
+                                --domain-owner "$owner" \
+                                --region "$region" \
+                                --query authorizationToken \
+                                --output text \
+                                "${profile_args[@]}"); then
+                            log_error "Failed to obtain CodeArtifact token"
+                            return 1
+                        fi
+                    fi
+
+                    if [[ $enable_uv == true ]]; then
+                        local repo_env
+                        repo_env=$(printf '%s' "$repo" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+
+                        export "UV_INDEX=${repo}=${repo_base}/simple/"
+                        export "UV_INDEX_${repo_env}_USERNAME=aws"
+                        export "UV_INDEX_${repo_env}_PASSWORD=$token"
+
+                        echo "✅ uv configured to use CodeArtifact ($repo in ${domain}/$region)"
+                    fi
+
+                    if [[ $enable_publish == true ]]; then
+                        export UV_PUBLISH_URL="https://aws:${token}@${host}/pypi/${repo}/"
+                        export UV_PUBLISH_USERNAME="aws"
+                        export UV_PUBLISH_PASSWORD="$token"
+
+                        echo "✅ uv publish configured for CodeArtifact ($repo in ${domain}/$region)"
+                    fi
+
+                    if [[ $enable_pip == true ]]; then
+                        if ! aws codeartifact login --tool pip \
+                                --domain "$domain" \
+                                --domain-owner "$owner" \
+                                --repository "$repo" \
+                                --region "$region" \
+                                "${profile_args[@]}" \
+                                > /dev/null 2>&1; then
+                            log_error "Failed to configure pip for CodeArtifact"
+                            return 1
+                        fi
+
+                        echo "✅ pip configured to use CodeArtifact ($repo in ${domain}/$region)"
+                    fi
+                }
+
+                # layout_uv - direnv layout for uv Python environments
+                # This function sets up a Python environment using uv similar to layout python
+
+                layout_uv() {
+
+
+                    # Check if uv is installed
+                    if ! command -v uv &> /dev/null; then
+                        log_error "uv is not installed. Please install it first: https://docs.astral.sh/uv/"
+                        return 1
+                    fi
+
+                    # Create .venv if it doesn't exist
+                    if [[ ! -d .venv ]]; then
+                        log_status "Creating virtual environment with uv using $uv_python_version"
+                        uv venv --seed
+                    fi
+
+                    # Sync dependencies if project files exist
+                    if [[ -f pyproject.toml ]] || [[ -f requirements.txt ]]; then
+                        # Watch files to trigger re-sync on changes
+                        watch_file pyproject.toml 2>/dev/null || true
+                        watch_file uv.lock 2>/dev/null || true
+                        watch_file requirements.txt 2>/dev/null || true
+
+                        log_status "Syncing dependencies..."
+                        if [[ -f pyproject.toml ]]; then
+                            # Try frozen sync first (fast), fall back to full sync if needed
+                            uv sync --frozen 2>/dev/null || uv sync
+                        elif [[ -f requirements.txt ]]; then
+                            uv pip install -r requirements.txt
+                        fi
+                    fi
+
+                    # Activate the virtual environment
+                    export VIRTUAL_ENV="$PWD/.venv"
+                    PATH_add "$VIRTUAL_ENV/bin"
+
+                    # Set Python-related environment variables
+                    export UV_PROJECT_ENVIRONMENT="$VIRTUAL_ENV"
+
+                    log_status "uv environment is activated: $VIRTUAL_ENV"
+                }
+              owner: ec2-user
+              group: ec2-user
+              mode: '000644'
             /usr/local/bin/banner:
               content: |
                 #!/bin/bash
