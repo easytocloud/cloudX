@@ -11,21 +11,14 @@ Metadata:
           - EnvironmentName
           - InstanceType
           - VolumeSize
-      - Label:
-          default: Recommended software packages to install
-        Parameters:
-          - UV
-          - BREW
-          - DIRENV  
-          - ZSH
-          - SSO
+          - ShutdownTimeout
       - Label:
           default: Optional software packages to install
         Parameters:
+          - SSO
           - NVM
           - PIP
           - DOCKER
-          - ANACONDA
           - PRIVPAGE
           - FORTOOLS
     ParameterLabels:
@@ -35,28 +28,22 @@ Metadata:
         default: CloudX Environment name
       InstanceType:
         default: EC2 Instance type
-      BREW:
-        default: Homebrew (if not installed as dependency)
-      DIRENV:
-        default: direnv - to automatically change AWS profiles upon directory change
+      VolumeSize:
+        default: Root volume size (GiB)
+      ShutdownTimeout:
+        default: Minutes before idle shutdown
       SSO:
-        default: SSO tools - to create .aws/config profiles for all roles you can assume
-      ZSH:
-        default: zsh with oh-my-easytocloud (oh-my-zsh theme)
+        default: SSO tools - configure AWS profiles
       NVM:
-        default: NVM package manager
+        default: Node Version Manager
       PIP:
         default: PIP package manager
-      PRIVPAGE:
-        default: AWS PAGER PrivPage
-      ANACONDA:
-        default: Anaconda
       DOCKER:
         default: Docker
+      PRIVPAGE:
+        default: AWS PAGER privpage
       FORTOOLS:
-        default: for-tools - a collection of tools to iterate over multiple AWS accounts
-      UV:
-        default: UV package manager - combine pip and venv in one extremely fast tool
+        default: for-tools (multi-account helpers)
       
 Parameters:
   UserName:
@@ -91,19 +78,16 @@ Parameters:
     MinValue: 10
     MaxValue: 300
 
-  ZSH:
+  ShutdownTimeout:
+    Type: Number
+    Description: Minutes of inactivity before the instance powers down automatically.
+    Default: 10
+    MinValue: 5
+    MaxValue: 1440
+
+  SSO:
     Type: String
     Default: 'true'
-    AllowedValues: ['true', 'false']
-
-  DIRENV:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-
-  DOCKER:
-    Type: String
-    Default: 'false'
     AllowedValues: ['true', 'false']
 
   NVM:
@@ -111,12 +95,12 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
 
-  UV:
+  PIP:
     Type: String
-    Default: 'true'
+    Default: 'false'
     AllowedValues: ['true', 'false']
 
-  PIP:
+  DOCKER:
     Type: String
     Default: 'false'
     AllowedValues: ['true', 'false']
@@ -126,29 +110,475 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
-  ANACONDA:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-
-  BREW:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-
-  SSO:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-
   FORTOOLS:
     Type: String
     Default: 'true'
     AllowedValues: ['true', 'false']
+
+Conditions:
+  InstallSSO: !Equals [!Ref SSO, 'true']
+  InstallDocker: !Equals [!Ref DOCKER, 'true']
+  InstallNvm: !Equals [!Ref NVM, 'true']
+  InstallPip: !Equals [!Ref PIP, 'true']
+  InstallPrivpage: !Equals [!Ref PRIVPAGE, 'true']
+  InstallFortools: !Equals [!Ref FORTOOLS, 'true']
   
 Resources:
   EC2Instance:
     Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          default:
+            - 00_base
+            - 10_autoshutdown
+            - 20_user
+            - 30_post
+        00_base:
+          packages:
+            yum:
+              git: []
+              jq: []
+              util-linux-user: []
+              ruby: []
+              ruby-devel: []
+              wget: []
+          commands:
+            00UpdatePackages:
+              command: yum update -y
+            01InstallDevTools:
+              command: |
+                if ! yum grouplist installed | grep -q "Development Tools"; then
+                  yum groupinstall -y 'Development Tools'
+                else
+                  echo "Development Tools group already installed"
+                fi
+            02PrepareWorkspace:
+              command: |
+                mkdir -p /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws
+                touch /home/ec2-user/.install-running
+                chown -R ec2-user:ec2-user /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.install-running
+        10_autoshutdown:
+          files:
+            /home/ec2-user/.cloudX/autoshutdown-configuration:
+              content: !Sub |
+                SHUTDOWN_TIMEOUT=${ShutdownTimeout}
+              mode: '000644'
+              owner: ec2-user
+              group: ec2-user
+            /home/ec2-user/.cloudX/stop-if-inactive.sh:
+              content: |
+                #!/bin/bash
+                #
+                # Based on AWS default cloud9 script, this is an improved version for use with C9 and VSCODE
+                #
+                # How it works:
+                #
+                # systemd - by means of /etc/system.d/system/cloudX-automatic-shutdown - runs this script every minute
+                # the script schedules a shutdown in 'SHUTDOWN_TIMEOUT' minutes when instance is idle
+                # if whithin the shutdown timeout period activity is detected (e.g. reconnect), the shutdown is canceled
+
+                # idle detection is
+                # - no vfs connected
+                # - no vscode-server running
+
+                # shutdown creates a file /run/systemd/shutdown/scheduled.
+                # shutdown -c doesn't remove the file, the cancel_shutdown function does.
+                # the existence of the file is checked by is_shutting_down as a reliable indicator
+                # of a shutdown being scheduled. if not - just to be sure - pgrep is used to check
+                # if a shutdown process is running
+
+                # active ssh/ssm sessions are not taken into account for idle detection !!
+
+                # -- functions --
+
+                exec 3> /home/ec2-user/.cloudX/autoshutdown-log
+
+                is_ec2user_connected()
+                {
+                    printf "\n$(date): output is_ec2user_connected():\n" >&3
+
+                    # check if server has established connection
+
+                    established=$(/usr/bin/lsof -i -a -u ec2-user | grep 'ESTABLISHED' )
+                    if [[ -z "$established" ]]; then
+                        echo "no established connection found" >&3
+                        return 1
+                    fi
+                    printf "established connections:\n $established" >&3
+
+                    return 0
+                }
+
+                is_active()
+                {
+                    is_ec2user_connected
+                }
+
+                is_shutting_down() {
+                    local FILE
+                    FILE=/run/systemd/shutdown/scheduled
+                    if [[ -f "$FILE" ]]; then
+                        return 0
+                    else
+                        pgrep -f /sbin/shutdown >/dev/null
+                    fi
+                }
+
+                cancel_shutdown()
+                {
+                    sudo shutdown -c
+                    sudo rm -f /run/systemd/shutdown/scheduled
+                }
+
+                # -- main --
+
+                set -euo pipefail
+                CONFIG=$(cat /home/ec2-user/.cloudX/autoshutdown-configuration)
+                SHUTDOWN_TIMEOUT=${CONFIG#*=}
+                if ! [[ $SHUTDOWN_TIMEOUT =~ ^[0-9]*$ ]]; then
+                    printf "\n*** shutdown timeout is invalid in /home/ec2-user/.cloudX/autoshutdown-configuration\n*** AUTOSHUTDOWN deactivated" >&3
+                    exit 1
+                fi
+
+                touch "/home/ec2-user/.cloudX/autoshutdown-timestamp"
+
+                echo "$(date): starting evaluation" >&3
+
+                if is_active; then
+                    printf "\n$(date): activity detected, " >&3
+                    if is_shutting_down; then
+                        cancel_shutdown
+                        echo "canceled shutdown " >&3
+                    else
+                        echo "not shutting down" >&3
+                    fi
+                else
+                    printf "\n$(date): NO activity detected, " >&3
+                    if ! is_shutting_down ; then
+                        sudo shutdown -h $SHUTDOWN_TIMEOUT 
+                        echo "initiated shutdown with waiting time of ${SHUTDOWN_TIMEOUT} minutes" >&3
+                    else
+                        echo "shutdown still scheduled ${SHUTDOWN_TIMEOUT} minutes after $(stat -c '%z' /run/systemd/shutdown/scheduled | cut -f2 -d' ' | cut -f-2 -d: )" >&3
+                    fi
+                fi
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            /etc/systemd/system/cloudX-automatic-shutdown.service:
+              content: |
+                [Unit]
+                Description=Stop system when idle
+                Wants=cloudX-automatic-shutdown.timer
+
+                [Service]
+                ExecStart=/home/ec2-user/.cloudX/stop-if-inactive.sh
+                Type=oneshot
+
+                [Install]
+                WantedBy=multi-user.target
+              mode: '000644'
+              owner: root
+              group: root
+            /etc/systemd/system/cloudX-automatic-shutdown.timer:
+              content: |
+                [Unit]
+                Description=Stop system when idle
+                Requires=cloudX-automatic-shutdown.service
+
+                [Timer]
+                Unit=cloudX-automatic-shutdown.service
+                OnCalendar=*-*-* *:*:00
+
+                [Install]
+                WantedBy=timers.target
+              mode: '000644'
+              owner: root
+              group: root
+          commands:
+            00PatchPam:
+              command: "sed -i '/pam_nologin.so/s/^/# /' /etc/pam.d/sshd"
+          services:
+            systemd:
+              cloudX-automatic-shutdown.timer:
+                enabled: true
+                ensureRunning: true
+        20_user:
+          files:
+            /tmp/cloudx-user-bootstrap.sh:
+              content: !Sub
+                - |
+                    #!/bin/bash
+                    set -euo pipefail
+
+                    INSTALL_SSO=${InstallSsoFlag}
+                    INSTALL_PIP=${InstallPipFlag}
+                    INSTALL_NVM=${InstallNvmFlag}
+                    INSTALL_PRIVPAGE=${InstallPrivpageFlag}
+                    INSTALL_FORTOOLS=${InstallFortoolsFlag}
+                    SSO_DOMAIN='${SsoDomainValue}'
+                    CLOUDX_HOME="/home/ec2-user/.cloudX"
+                    EC2_USER_HOME="/home/ec2-user"
+
+                    configure_git() {
+                        git config --global credential.helper '!aws codecommit credential-helper $@'
+                        git config --global credential.UseHttpPath true
+                    }
+
+                    ensure_homebrew() {
+                        if ! command -v brew &> /dev/null; then
+                            echo "Installing Homebrew..."
+                            NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                        else
+                            echo "Homebrew already installed"
+                        fi
+
+                        eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+                        brew tap easytocloud/tap >/dev/null 2>&1 || true
+                    }
+
+                    ensure_direnv() {
+                        if ! command -v direnv &> /dev/null; then
+                            echo "Installing direnv..."
+                            brew install direnv
+                        else
+                            echo "direnv already installed"
+                        fi
+                    }
+
+                    ensure_uv() {
+                        if ! command -v uv &> /dev/null; then
+                            echo "Installing uv..."
+                            brew install uv
+                        else
+                            echo "uv already installed"
+                        fi
+                    }
+
+                    ensure_zsh_stack() {
+                        if ! command -v zsh &> /dev/null || [ ! -d ~/.oh-my-zsh ]; then
+                            echo "Installing zsh and oh-my-zsh..."
+                            brew install zsh
+                            sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+                            wget https://raw.githubusercontent.com/easytocloud/oh-my-easytocloud/main/themes/easytocloud.zsh-theme -O ~/.oh-my-zsh/custom/themes/easytocloud.zsh-theme
+                            sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="easytocloud"/' /home/ec2-user/.zshrc
+                            echo '/home/linuxbrew/.linuxbrew/bin/zsh' | sudo tee -a /etc/shells >/dev/null
+                        else
+                            echo "zsh already installed"
+                        fi
+                    }
+
+                    install_sso_tools() {
+                        if [[ "$INSTALL_SSO" != "true" ]]; then
+                            return
+                        fi
+
+                        if [[ -z "$SSO_DOMAIN" || "$SSO_DOMAIN" == "None" ]]; then
+                            echo "SSO domain not provided, skipping SSO tools"
+                            return
+                        fi
+
+                        if ! command -v generate-sso-config &> /dev/null; then
+                            echo "Installing SSO tools..."
+                            brew install easytocloud/tap/sso-tools
+                            touch /home/ec2-user/.aws/config.needed
+                        else
+                            echo "SSO tools already installed"
+                        fi
+                    }
+
+                    install_fortools() {
+                        if [[ "$INSTALL_FORTOOLS" != "true" ]]; then
+                            return
+                        fi
+
+                        if ! command -v for-account &> /dev/null; then
+                            echo "Installing for-tools..."
+                            brew install easytocloud/tap/for-tools
+                        else
+                            echo "for-tools already installed"
+                        fi
+                    }
+
+                    install_pip_stack() {
+                        if [[ "$INSTALL_PIP" != "true" ]]; then
+                            return
+                        fi
+
+                        if ! command -v pip &> /dev/null; then
+                            echo "Installing pip..."
+                            curl -O https://bootstrap.pypa.io/get-pip.py
+                            python3 get-pip.py --user
+                            rm get-pip.py
+                        else
+                            echo "pip already installed"
+                        fi
+                    }
+
+                    install_nvm_stack() {
+                        if [[ "$INSTALL_NVM" != "true" ]]; then
+                            return
+                        fi
+
+                        if [ ! -d ~/.nvm ]; then
+                            echo "Installing nvm..."
+                            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
+                        else
+                            echo "nvm already installed"
+                        fi
+                    }
+
+                    install_privpage_stack() {
+                        if [[ "$INSTALL_PRIVPAGE" != "true" ]]; then
+                            return
+                        fi
+
+                        if ! command -v privpage &> /dev/null; then
+                            echo "Installing privpage..."
+                            brew install easytocloud/tap/privpage
+                        else
+                            echo "privpage already installed"
+                        fi
+                    }
+
+                    append_unique_line() {
+                        local file="$1"
+                        local line="$2"
+                        grep -qxF "$line" "$file" 2>/dev/null || echo "$line" >> "$file"
+                    }
+
+                    update_bashrc() {
+                        local bashrc="$EC2_USER_HOME/.bashrc"
+                        touch "$bashrc"
+                        append_unique_line "$bashrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
+                        append_unique_line "$bashrc" 'eval "$(direnv hook bash)"'
+                        append_unique_line "$bashrc" "complete -C '/usr/bin/aws_completer' aws"
+
+                        if [[ "$INSTALL_SSO" == "true" ]]; then
+                          local sso_notice='test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run uvx sso-config-generator to configure AWS CLI **\n\n"'
+                          append_unique_line "$bashrc" "$sso_notice"
+                        fi
+
+                        if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
+                            append_unique_line "$bashrc" 'export AWS_PAGER=privpage'
+                        fi
+                    }
+
+                    update_zshrc() {
+                        local zshrc="$EC2_USER_HOME/.zshrc"
+                        if [ ! -f "$zshrc" ]; then
+                            return
+                        fi
+
+                        append_unique_line "$zshrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
+                        append_unique_line "$zshrc" 'eval "$(direnv hook zsh)"'
+
+                        if [[ "$INSTALL_SSO" == "true" ]]; then
+                          local sso_notice='test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run uvx sso-config-generator to configure AWS CLI **\n\n"'
+                          append_unique_line "$zshrc" "$sso_notice"
+                        fi
+
+                        if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
+                            append_unique_line "$zshrc" 'export AWS_PAGER=privpage'
+                        fi
+
+                        if ! grep -q "bashcompinit" "$zshrc" 2>/dev/null; then
+                            {
+                                echo 'autoload bashcompinit && bashcompinit'
+                                echo 'autoload -Uz compinit && compinit'
+                                echo "complete -C '/usr/bin/aws_completer' aws"
+                            } >> "$zshrc"
+                        fi
+                    }
+
+                    main_user_setup() {
+                        configure_git
+                        ensure_homebrew
+                        ensure_direnv
+                        ensure_uv
+                        ensure_zsh_stack
+                        install_sso_tools
+                        install_fortools
+                        install_pip_stack
+                        install_nvm_stack
+                        install_privpage_stack
+                        update_bashrc
+                        update_zshrc
+                    }
+
+                    main_user_setup
+                - InstallSsoFlag: !If [InstallSSO, 'true', 'false']
+                  InstallPipFlag: !If [InstallPip, 'true', 'false']
+                  InstallNvmFlag: !If [InstallNvm, 'true', 'false']
+                  InstallPrivpageFlag: !If [InstallPrivpage, 'true', 'false']
+                  InstallFortoolsFlag: !If [InstallFortools, 'true', 'false']
+                  SsoDomainValue: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SSODomain}}'
+              mode: '000755'
+              owner: ec2-user
+              group: ec2-user
+            /home/ec2-user/.aws/config:
+              content: !Sub |
+                [sso-session sso]
+                sso_start_url = https://{{resolve:ssm:/cloudX/${EnvironmentName}/SSODomain}}/start#/
+                sso_region = eu-west-1
+                sso_registration_scopes = sso:account:access
+
+                [profile sso-browser]
+                sso_session = sso
+                region = eu-west-1
+                output = json
+              owner: ec2-user
+              group: ec2-user
+              mode: '000600'
+            /usr/local/bin/banner:
+              content: |
+                #!/bin/bash
+                # Wrapper for AL2023 to display banners via uv/pyfiglet
+                if [[ "$#" -eq 0 ]]; then
+                    echo "Usage: banner string" >&2
+                    exit 2
+                fi
+                uvx pyfiglet "$@"
+              owner: root
+              group: root
+              mode: '000755'
+          commands:
+            00RunBootstrap:
+              command: /usr/bin/su - ec2-user -c '/bin/bash /tmp/cloudx-user-bootstrap.sh'
+        30_post:
+          commands:
+            00SetDefaultShell:
+              command: |
+                if [ -f /home/linuxbrew/.linuxbrew/bin/zsh ]; then
+                  current_shell=$(getent passwd ec2-user | cut -d: -f7)
+                  if [ "$current_shell" != "/home/linuxbrew/.linuxbrew/bin/zsh" ]; then
+                    chsh -s /home/linuxbrew/.linuxbrew/bin/zsh ec2-user
+                  fi
+                else
+                  echo "Skipping zsh default shell configuration"
+                fi
+            10ConfigureDocker:
+              env:
+                INSTALL_DOCKER: !If [InstallDocker, 'true', 'false']
+              command: |
+                if [ "$INSTALL_DOCKER" = "true" ]; then
+                  if ! command -v docker &> /dev/null; then
+                    yum install -y docker
+                  fi
+                  usermod -a -G docker ec2-user
+                  systemctl enable docker
+                  systemctl start docker
+                else
+                  echo "Docker installation disabled via template parameter"
+                fi
+            30Finalize:
+              command: |
+                touch /home/ec2-user/.install-done
+                rm -f /home/ec2-user/.install-running
+                chown ec2-user:ec2-user /home/ec2-user/.install-done
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT30M
     Properties:
       ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
       InstanceType: !Ref InstanceType
@@ -159,9 +589,11 @@ Resources:
             VolumeType: gp3
             DeleteOnTermination: true
       UserData:
-        Fn::Base64: |
-          #!/bin/bash
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/easytocloud/cloudX/HEAD/ec2cloudx.sh)"
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2Instance --region ${AWS::Region} --configsets default
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource EC2Instance --region ${AWS::Region}
 
       SecurityGroupIds:
         - !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SecurityGroup}}'
@@ -179,25 +611,3 @@ Resources:
           Value: !Sub "cloudX-${EnvironmentName}-${UserName}"
         - Key: SSODomain
           Value: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SSODomain}}'
-        - Key: zsh
-          Value: !Ref ZSH
-        - Key: direnv
-          Value: !Ref DIRENV
-        - Key: brew
-          Value: !Ref BREW
-        - Key: sso
-          Value: !Ref SSO
-        - Key: nvm
-          Value: !Ref NVM
-        - Key: pip
-          Value: !Ref PIP
-        - Key: privpage
-          Value: !Ref PRIVPAGE
-        - Key: anaconda
-          Value: !Ref ANACONDA
-        - Key: docker
-          Value: !Ref DOCKER
-        - Key: fortools
-          Value: !Ref FORTOOLS
-        - Key: uv
-          Value: !Ref UV
