@@ -140,8 +140,6 @@ Resources:
               git: []
               jq: []
               util-linux-user: []
-              ruby: []
-              ruby-devel: []
               wget: []
           commands:
             00UpdatePackages:
