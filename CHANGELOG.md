@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.5](https://github.com/easytocloud/cloudX/compare/v1.1.4...v1.1.5) (2025-11-15)
+
+
+### Bug Fixes
+
+* rewrite instance.yaml using metadata ([34ba98c](https://github.com/easytocloud/cloudX/commit/34ba98ccae11eb747056f141eda82127f8dcfda9))
+
 ## [1.1.4](https://github.com/easytocloud/cloudX/compare/v1.1.3...v1.1.4) (2025-11-14)
 
 
