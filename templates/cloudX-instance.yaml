@@ -55,7 +55,7 @@ Parameters:
     Type: String
     Default: 'OTA'
     Description: 'Name of the CloudX environment'
-    
+    # CUSTOMIZATION_MARKER:EnvironmentName - Add AllowedValues or other constraints here
 
   InstanceType:
     Type: String
@@ -134,6 +134,7 @@ Resources:
             - 10_autoshutdown
             - 20_user
             - 30_post
+            # CUSTOMIZATION_MARKER:configSets - Add custom configSets here
         00_base:
           packages:
             yum:
@@ -791,6 +792,7 @@ Resources:
                 touch /home/ec2-user/.install-done
                 rm -f /home/ec2-user/.install-running
                 chown ec2-user:ec2-user /home/ec2-user/.install-done
+        # CUSTOMIZATION_MARKER:configSetDefinitions - Add custom configSet definitions here
     CreationPolicy:
       ResourceSignal:
         Timeout: PT30M
