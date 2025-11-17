@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0](https://github.com/easytocloud/cloudX/compare/v1.1.7...v1.2.0) (2025-11-17)
+
+
+### Features
+
+* added codeartifact config setting ([f10e608](https://github.com/easytocloud/cloudX/commit/f10e608422f690c814ce21181ee7611fa395c01b))
+
 ## [1.1.7](https://github.com/easytocloud/cloudX/compare/v1.1.6...v1.1.7) (2025-11-15)
 
 
