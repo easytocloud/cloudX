@@ -528,19 +528,44 @@ Resources:
               owner: ec2-user
               group: ec2-user
               mode: '000600'
-            /home/ec2-user/.config/direnv/lib/layouts.sh:
+            /home/ec2-user/.config/direnv/lib/layout_codeartifact.sh:
               content: |
-                #! /usr/bin/env bash
+                #!/usr/bin/env bash
+                # layout_codeartifact - direnv layout for AWS CodeArtifact integration
+                # Supports pip, uv, and twine publishing
+                #
+                # Configuration File (optional): ~/.config/codeartifact/codeartifact.conf
+                # Format:
+                #   domain="your-domain"
+                #   account="123456789012"
+                #   region="us-east-1"
+                #   repository="your-repo"
+                #
+                # If config file exists, values are used as defaults.
+                # Command-line parameters override config file values.
 
                 layout_codeartifact() {
+                    local usage="usage: layout_codeartifact [pip] [publish] [uv] [domain=<domain>] [account=<account>] [region=<region>] [repository=<repo>] [profile=<profile>]"
 
-                    local usage="usage: layout uv [pip] [publish] [uv] [domain=<domain>] [owner=<owner>] [region=<region>] [repo=<repo>] [profile=<profile>]"
+                    # Initialize defaults
+                    local domain=""
+                    local account=""
+                    local region=""
+                    local repository=""
+                    local profile=""
+
+                    # Load defaults from config file if it exists
+                    if [ -f ~/.config/codeartifact/codeartifact.conf ]; then
+                        source ~/.config/codeartifact/codeartifact.conf
+                        # Config file variables: domain, account, region, repository
+                    fi
 
                     local enable_pip=false
                     local enable_publish=false
                     local enable_uv=false
                     local modes_explicit=false
 
+                    # Parse arguments (override config file defaults)
                     for arg in "$@"; do
                         case "$arg" in
                             pip)
@@ -558,14 +583,14 @@ Resources:
                             domain=*)
                                 domain=${arg#domain=}
                                 ;;
-                            owner=*)
-                                owner=${arg#owner=}
+                            account=*)
+                                account=${arg#account=}
                                 ;;
                             region=*)
                                 region=${arg#region=}
                                 ;;
-                            repo=*)
-                                repo=${arg#repo=}
+                            repository=*)
+                                repository=${arg#repository=}
                                 ;;
                             profile=*)
                                 profile=${arg#profile=}
@@ -582,75 +607,104 @@ Resources:
                         esac
                     done
 
+                    # If no modes specified, enable all
                     if [[ $modes_explicit == false ]]; then
                         enable_pip=true
                         enable_publish=true
                         enable_uv=true
                     fi
 
+                    # Validate required parameters (account is optional, will be inferred from credentials)
+                    if [[ -z "$domain" || -z "$region" || -z "$repository" ]]; then
+                        log_error "Missing required CodeArtifact parameters."
+                        log_error "Either create ~/.config/codeartifact/codeartifact.conf with defaults, or provide required parameters:"
+                        log_error "  domain=<domain> region=<region> repository=<repository>"
+                        log_error "Optional: account=<account> (will be inferred from AWS credentials if not provided)"
+                        echo "$usage"
+                        return 1
+                    fi
+
+                    # Build optional arguments
                     local profile_args=()
                     if [[ -n $profile ]]; then
                         profile_args=(--profile "$profile")
                     fi
 
-                    local host="${domain}-${owner}.d.codeartifact.${region}.amazonaws.com"
-                    local repo_base="https://${host}/pypi/${repo}"
+                    local account_args=()
+                    if [[ -n $account ]]; then
+                        account_args=(--domain-owner "$account")
+                    fi
 
+                    # If account not provided, get it from AWS credentials
+                    if [[ -z "$account" ]]; then
+                        account=$(aws sts get-caller-identity --query Account --output text "${profile_args[@]}")
+                    fi
+
+                    local host="${domain}-${account}.d.codeartifact.${region}.amazonaws.com"
+                    local repo_base="https://${host}/pypi/${repository}"
+
+                    # Get CodeArtifact token if needed
                     local token=""
                     if [[ $enable_uv == true || $enable_publish == true ]]; then
                         if ! token=$(aws codeartifact get-authorization-token \
                                 --domain "$domain" \
-                                --domain-owner "$owner" \
                                 --region "$region" \
                                 --query authorizationToken \
                                 --output text \
+                                "${account_args[@]}" \
                                 "${profile_args[@]}"); then
                             log_error "Failed to obtain CodeArtifact token"
                             return 1
                         fi
                     fi
 
+                    # Configure uv
                     if [[ $enable_uv == true ]]; then
                         local repo_env
-                        repo_env=$(printf '%s' "$repo" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+                        repo_env=$(printf '%s' "$repository" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
 
-                        export "UV_INDEX=${repo}=${repo_base}/simple/"
+                        export "UV_INDEX=${repository}=${repo_base}/simple/"
                         export "UV_INDEX_${repo_env}_USERNAME=aws"
                         export "UV_INDEX_${repo_env}_PASSWORD=$token"
 
-                        echo "✅ uv configured to use CodeArtifact ($repo in ${domain}/$region)"
+                        echo "✅ uv configured to use CodeArtifact ($repository in ${domain}/$region)"
                     fi
 
+                    # Configure uv publish
                     if [[ $enable_publish == true ]]; then
-                        export UV_PUBLISH_URL="https://aws:${token}@${host}/pypi/${repo}/"
+                        export UV_PUBLISH_URL="https://aws:${token}@${host}/pypi/${repository}/"
                         export UV_PUBLISH_USERNAME="aws"
                         export UV_PUBLISH_PASSWORD="$token"
 
-                        echo "✅ uv publish configured for CodeArtifact ($repo in ${domain}/$region)"
+                        echo "✅ uv publish configured for CodeArtifact ($repository in ${domain}/$region)"
                     fi
 
+                    # Configure pip
                     if [[ $enable_pip == true ]]; then
                         if ! aws codeartifact login --tool pip \
                                 --domain "$domain" \
-                                --domain-owner "$owner" \
-                                --repository "$repo" \
+                                --repository "$repository" \
                                 --region "$region" \
+                                "${account_args[@]}" \
                                 "${profile_args[@]}" \
                                 > /dev/null 2>&1; then
                             log_error "Failed to configure pip for CodeArtifact"
                             return 1
                         fi
 
-                        echo "✅ pip configured to use CodeArtifact ($repo in ${domain}/$region)"
+                        echo "✅ pip configured to use CodeArtifact ($repository in ${domain}/$region)"
                     fi
                 }
-
+              owner: ec2-user
+              group: ec2-user
+              mode: '000644'
+            /home/ec2-user/.config/direnv/lib/layout_uv.sh:
+              content: |
+                #!/usr/bin/env bash
                 # layout_uv - direnv layout for uv Python environments
-                # This function sets up a Python environment using uv similar to layout python
+                # Sets up Python virtual environment using uv (similar to layout python)
 
                 layout_uv() {
-
-
                     # Check if uv is installed
                     if ! command -v uv &> /dev/null; then
                         log_error "uv is not installed. Please install it first: https://docs.astral.sh/uv/"
@@ -659,7 +713,7 @@ Resources:
 
                     # Create .venv if it doesn't exist
                     if [[ ! -d .venv ]]; then
-                        log_status "Creating virtual environment with uv using $uv_python_version"
+                        log_status "Creating virtual environment with uv"
                         uv venv --seed
                     fi
 
