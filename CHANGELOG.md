@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.1](https://github.com/easytocloud/cloudX/compare/v1.3.0...v1.3.1) (2025-11-17)
+
+
+### Documentation
+
+* added customization markers ([c3b77fa](https://github.com/easytocloud/cloudX/commit/c3b77fad0aa737639ab3c92a05d517dadafa9692))
+
 ## [1.3.0](https://github.com/easytocloud/cloudX/compare/v1.2.0...v1.3.0) (2025-11-17)
 
 
