@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.2](https://github.com/easytocloud/cloudX/compare/v1.3.1...v1.3.2) (2025-11-18)
+
+
+### Bug Fixes
+
+* allow all outbound traffic from cloudX instance ([5ee40b3](https://github.com/easytocloud/cloudX/commit/5ee40b30640bc93cb227b7c98a4c39cd69b692d7))
+
 ## [1.3.1](https://github.com/easytocloud/cloudX/compare/v1.3.0...v1.3.1) (2025-11-17)
 
 
