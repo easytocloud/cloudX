@@ -558,12 +558,12 @@ Resources:
                                 profile=${arg#profile=}
                                 ;;
                             -h|--help|help)
-                                echo "$usage"
+                                log_status "$usage"
                                 return 0
                                 ;;
                             *)
                                 log_error "Unknown argument: $arg"
-                                echo "$usage"
+                                log_error "$usage"
                                 return 1
                                 ;;
                         esac
@@ -582,7 +582,7 @@ Resources:
                         log_error "Either create ~/.config/codeartifact/codeartifact.conf with defaults, or provide required parameters:"
                         log_error "  domain=<domain> region=<region> repository=<repository>"
                         log_error "Optional: account=<account> (will be inferred from AWS credentials if not provided)"
-                        echo "$usage"
+                        log_error "$usage"
                         return 1
                     fi
 
@@ -629,7 +629,7 @@ Resources:
                         export "UV_INDEX_${repo_env}_USERNAME=aws"
                         export "UV_INDEX_${repo_env}_PASSWORD=$token"
 
-                        echo "✅ uv configured to use CodeArtifact ($repository in ${domain}/$region)"
+                        log_status "uv configured to use CodeArtifact ($repository in ${domain}/$region)"
                     fi
 
                     # Configure uv publish
@@ -638,7 +638,7 @@ Resources:
                         export UV_PUBLISH_USERNAME="aws"
                         export UV_PUBLISH_PASSWORD="$token"
 
-                        echo "✅ uv publish configured for CodeArtifact ($repository in ${domain}/$region)"
+                        log_status "uv publish configured for CodeArtifact ($repository in ${domain}/$region)"
                     fi
 
                     # Configure pip
@@ -654,7 +654,7 @@ Resources:
                             return 1
                         fi
 
-                        echo "✅ pip configured to use CodeArtifact ($repository in ${domain}/$region)"
+                        log_status "pip configured to use CodeArtifact ($repository in ${domain}/$region)"
                     fi
                 }
               owner: ec2-user
