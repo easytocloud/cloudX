@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.5](https://github.com/easytocloud/cloudX/compare/v1.3.4...v1.3.5) (2025-11-21)
+
+
+### Documentation
+
+* **ai:** update architecture and project overview for accuracy ([dfebe6a](https://github.com/easytocloud/cloudX/commit/dfebe6a7f232e69ca1d1641d168a894fb69e4949))
+
 ## [1.3.4](https://github.com/easytocloud/cloudX/compare/v1.3.3...v1.3.4) (2025-11-21)
 
 
