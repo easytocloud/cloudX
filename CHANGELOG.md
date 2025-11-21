@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.4](https://github.com/easytocloud/cloudX/compare/v1.3.3...v1.3.4) (2025-11-21)
+
+
+### Documentation
+
+* **ai:** add commit message conventions for semantic release ([a1330e7](https://github.com/easytocloud/cloudX/commit/a1330e7a2ad52e43f4f7c03139722ed11f038f50))
+
 ## [1.3.3](https://github.com/easytocloud/cloudX/compare/v1.3.2...v1.3.3) (2025-11-21)
 
 
