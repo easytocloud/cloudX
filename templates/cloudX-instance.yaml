@@ -15,7 +15,6 @@ Metadata:
       - Label:
           default: Optional software packages to install
         Parameters:
-          - SSO
           - NVM
           - PIP
           - DOCKER
@@ -32,8 +31,6 @@ Metadata:
         default: Root volume size (GiB)
       ShutdownTimeout:
         default: Minutes before idle shutdown
-      SSO:
-        default: SSO tools - configure AWS profiles
       NVM:
         default: Node Version Manager
       PIP:
@@ -85,11 +82,6 @@ Parameters:
     MinValue: 5
     MaxValue: 1440
 
-  SSO:
-    Type: String
-    Default: 'true'
-    AllowedValues: ['true', 'false']
-
   NVM:
     Type: String
     Default: 'false'
@@ -116,7 +108,6 @@ Parameters:
     AllowedValues: ['true', 'false']
 
 Conditions:
-  InstallSSO: !Equals [!Ref SSO, 'true']
   InstallDocker: !Equals [!Ref DOCKER, 'true']
   InstallNvm: !Equals [!Ref NVM, 'true']
   InstallPip: !Equals [!Ref PIP, 'true']
@@ -310,7 +301,6 @@ Resources:
                     #!/bin/bash
                     set -euo pipefail
 
-                    INSTALL_SSO=${InstallSsoFlag}
                     INSTALL_PIP=${InstallPipFlag}
                     INSTALL_NVM=${InstallNvmFlag}
                     INSTALL_PRIVPAGE=${InstallPrivpageFlag}
@@ -364,25 +354,6 @@ Resources:
                             echo '/home/linuxbrew/.linuxbrew/bin/zsh' | sudo tee -a /etc/shells >/dev/null
                         else
                             echo "zsh already installed"
-                        fi
-                    }
-
-                    install_sso_tools() {
-                        if [[ "$INSTALL_SSO" != "true" ]]; then
-                            return
-                        fi
-
-                        if [[ -z "$SSO_DOMAIN" || "$SSO_DOMAIN" == "None" ]]; then
-                            echo "SSO domain not provided, skipping SSO tools"
-                            return
-                        fi
-
-                        if ! command -v generate-sso-config &> /dev/null; then
-                            echo "Installing SSO tools..."
-                            brew install easytocloud/tap/sso-tools
-                            touch /home/ec2-user/.aws/config.needed
-                        else
-                            echo "SSO tools already installed"
                         fi
                     }
 
@@ -452,11 +423,7 @@ Resources:
                         append_unique_line "$bashrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
                         append_unique_line "$bashrc" 'eval "$(direnv hook bash)"'
                         append_unique_line "$bashrc" "complete -C '/usr/bin/aws_completer' aws"
-
-                        if [[ "$INSTALL_SSO" == "true" ]]; then
-                          local sso_notice='test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run uvx sso-config-generator to configure AWS CLI **\n\n"'
-                          append_unique_line "$bashrc" "$sso_notice"
-                        fi
+                        append_unique_line "$bashrc" "alias ssostart='aws sso login --sso-session sso'"
 
                         if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
                             append_unique_line "$bashrc" 'export AWS_PAGER=privpage'
@@ -471,11 +438,7 @@ Resources:
 
                         append_unique_line "$zshrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
                         append_unique_line "$zshrc" 'eval "$(direnv hook zsh)"'
-
-                        if [[ "$INSTALL_SSO" == "true" ]]; then
-                          local sso_notice='test -f /home/ec2-user/.aws/config.needed && printf "\n\n** Please run uvx sso-config-generator to configure AWS CLI **\n\n"'
-                          append_unique_line "$zshrc" "$sso_notice"
-                        fi
+                        append_unique_line "$zshrc" "alias ssostart='aws sso login --sso-session sso'"
 
                         if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
                             append_unique_line "$zshrc" 'export AWS_PAGER=privpage'
@@ -496,7 +459,6 @@ Resources:
                         ensure_direnv
                         ensure_uv
                         ensure_zsh_stack
-                        install_sso_tools
                         install_fortools
                         install_pip_stack
                         install_nvm_stack
@@ -506,8 +468,7 @@ Resources:
                     }
 
                     main_user_setup
-                - InstallSsoFlag: !If [InstallSSO, 'true', 'false']
-                  InstallPipFlag: !If [InstallPip, 'true', 'false']
+                - InstallPipFlag: !If [InstallPip, 'true', 'false']
                   InstallNvmFlag: !If [InstallNvm, 'true', 'false']
                   InstallPrivpageFlag: !If [InstallPrivpage, 'true', 'false']
                   InstallFortoolsFlag: !If [InstallFortools, 'true', 'false']

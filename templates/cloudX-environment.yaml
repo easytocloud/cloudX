@@ -205,9 +205,9 @@ Resources:
             - ec2:DescribeVpcs
             Resource: "*"
 
-  # Group for cloudX users with permission 
-  # - to start and connect to their instances via SSH cloudX proxy
-  # - to rotate their AKSK keys for their cloudX proxy profile
+  # Group for cloudX users with permission
+  # - to start and connect to their instances via SSH cloudX-proxy
+  # - to rotate their AKSK keys for their cloudX-proxy profile
   cloudXGroup:
     Type: AWS::IAM::Group
     Properties:
@@ -219,7 +219,7 @@ Resources:
   VSCodeConnectPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
-      Description: "Permissions for cloudx-proxy to start and connect to cloudx user's EC2 instances"
+      Description: "Permissions for cloudX-proxy to start and connect to cloudX user's EC2 instances"
       PolicyDocument: !Sub |
         {
           "Version": "2012-10-17",

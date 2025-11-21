@@ -64,7 +64,7 @@ All configuration is stored in SSM Parameter Store at `/cloudX/{EnvironmentName}
 Creates an EC2 instance configured as a development backend:
 - Amazon Linux 2023 (latest AMI, automatically updated)
 - Configurable instance type (default: t3.large) and volume size
-- Automatic software installation via UserData (runs `install.sh`)
+- Automatic software installation via UserData (embedded in template)
 - Tagged with environment and username for ABAC permissions
 - SSM-enabled for secure connections without SSH keys in AWS
 
@@ -73,15 +73,19 @@ Parameters:
 - `EnvironmentName`: Name of the cloudX environment (must match an existing environment)
 - `InstanceType`: EC2 instance type (default: t3.large)
 - `VolumeSize`: Root volume size in GB (default: 16)
-- Software packages: `BREW`, `DIRENV`, `SSO`, `ZSH`, `UV`, `NVM`, `PIP`, `DOCKER`, `ANACONDA`, `PRIVPAGE`, `FORTOOLS`
+- Software packages: `BREW`, `DIRENV`, `ZSH`, `UV`, `NVM`, `PIP`, `DOCKER`, `ANACONDA`, `PRIVPAGE`, `FORTOOLS`
 
-The instance automatically retrieves configuration from the environment's SSM parameters. Software selection can be controlled via template parameters or EC2 instance tags.
+The instance automatically retrieves configuration from the environment's SSM parameters. Software selection can be controlled via template parameters.
 
 ### cloudX-user.yaml
 
 **Optional: Deploy for each developer per environment if dedicated IAM credentials are needed.**
 
-Creates a dedicated IAM user with environment-scoped access:
+**Recommendation:** We strongly prefer users to be identified via an SSO Role with appropriate permissions. This template is provided for scenarios where IAM users are strictly required.
+
+If using SSO, ensure your permission set matches the permissions defined in the IAM group created by the environment template.
+
+This template creates a dedicated IAM user with environment-scoped access:
 - IAM username format: `cloudX-{EnvironmentName}-{UserName}` (e.g., "cloudX-OTA-john")
 - Automatic membership in the environment's IAM group
 - Access key pair automatically generated
@@ -92,8 +96,6 @@ Parameters:
 - `UserName`: Username without prefix (e.g., "john")
 - `EnvironmentName`: Name of the cloudX environment (must match an existing environment)
 - `EmailAddress`: Email address for credential notification (optional)
-
-**Note:** You can skip this template if developers already have appropriate IAM/SSO permissions. The ABAC policies in the environment's IAM group will match the full username format `cloudX-{EnvironmentName}-{UserName}` to control instance access.
 
 ## Client-Side Setup
 
@@ -107,34 +109,24 @@ For setting up your local machine to connect to cloudX instances, please refer t
 
 ## Software Installation on Instances
 
-The `install.sh` script runs automatically via UserData on instance creation. Software selection can be controlled via:
-
-1. **CloudFormation parameters** (recommended) - Select software during stack deployment
-2. **EC2 instance tags** - Set tags manually after deployment or via automation
+Software installation is handled automatically via UserData and CloudFormation Init metadata embedded directly in the template. Software selection can be controlled via CloudFormation parameters during stack deployment.
 
 ### Available Software Packages
 
 | Package | Description | Default |
 |---------|-------------|---------|
-| `UV` | UV package manager - extremely fast pip/venv alternative | ✓ Recommended |
-| `BREW` | Homebrew package manager | ✓ Recommended |
-| `DIRENV` | Automatic environment variable management | ✓ Recommended |
-| `SSO` | AWS SSO tools for multi-account access | ✓ Recommended |
-| `ZSH` | Zsh + Oh My Zsh with easytocloud theme | ✓ Recommended |
-| `PRIVPAGE` | AWS CLI output privacy tool | ✓ Recommended |
-| `FORTOOLS` | Multi-account AWS iteration tools | ✓ Recommended |
+| `UV` | UV package manager - extremely fast pip/venv alternative | ✓ Mandatory |
+| `BREW` | Homebrew package manager | ✓ Mandatory |
+| `DIRENV` | Automatic environment variable management | ✓ Mandatory |
+| `ZSH` | Zsh + Oh My Zsh with easytocloud theme | ✓ Mandatory |
+| `PRIVPAGE` | AWS CLI output privacy tool | ✓ Mandatory |
+| `FORTOOLS` | Multi-account AWS iteration tools | ✓ Mandatory |
+| `SSO` | AWS SSO configuration (adds `ssostart` alias) | ✓ Mandatory |
 | `NVM` | Node Version Manager | Optional |
 | `PIP` | Python pip package manager | Optional |
 | `DOCKER` | Docker container runtime | Optional |
-| `ANACONDA` | Anaconda data science distribution | Optional |
 
-**Installation Methods:**
-
-- **Via CloudFormation**: Set parameter values to `true` or `false` during stack deployment
-- **Via EC2 Tags**: Add tags with key matching the package name (lowercase) and value `true`
-- **Via `ec2cloudx.sh`**: For existing instances, use command-line options (e.g., `--brew --zsh --docker`)
-
-The `SSODomain` is automatically retrieved from the environment configuration but can be overridden via instance tags if needed.
+**Note:** The `SSODomain` is automatically retrieved from the environment configuration.
 
 ## Repository Contents
 
@@ -144,9 +136,8 @@ The `SSODomain` is automatically retrieved from the environment configuration bu
 │   ├── cloudX-environment.yaml    # Environment setup (deploy once)
 │   ├── cloudX-instance.yaml       # Instance template (per developer)
 │   └── cloudX-user.yaml           # Optional IAM user creation
-├── install.sh                     # UserData installation script
-├── ec2cloudx.sh                   # Enhanced installation script with CLI options
-└── distribution/bin/              # Legacy proxy scripts (see note below)
+├── install.sh                     # UserData installation script (Legacy support)
+└── archive/                       # Archived scripts (proxies, ec2cloudx.sh)
 ```
 
 ## Contributing
@@ -157,4 +148,4 @@ Issues and pull requests are welcome. For client-side proxy functionality, pleas
 
 ### Legacy Note
 
-The `distribution/bin/cloudX-proxy.sh` and `Windows/cloudx-proxy.ps1` scripts in this repository are maintained for compatibility but have been superseded by the dedicated **[cloudX-proxy](https://github.com/easytocloud/cloudX-proxy)** tool, which provides improved SSH proxy management and configuration.
+The legacy proxy scripts (`cloudX-proxy.sh` and `cloudx-proxy.ps1`) have been moved to the `archive/` directory. They are no longer maintained or published to Homebrew. Please use the dedicated **[cloudX-proxy](https://github.com/easytocloud/cloudX-proxy)** tool for all client-side connectivity.
