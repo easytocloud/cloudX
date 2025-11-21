@@ -9,12 +9,12 @@ cloudX provides AWS CloudFormation templates for setting up Amazon Linux 2023 EC
     *   `cloudX-instance.yaml`: Deploys the actual development instance.
     *   `cloudX-user.yaml`: Optional template for creating dedicated IAM users.
 
-2.  **Installation Scripts**:
-    *   `install.sh`: Run via UserData on instance creation.
-    *   `ec2cloudx.sh`: Enhanced installation script with CLI options for existing instances.
+2.  **Legacy Scripts**:
+    *   `install.sh`: Legacy installation script (kept for compatibility).
+    *   `ec2cloudx.sh`: Archived installation script.
+    *   `cloudX-proxy.sh` & `cloudx-proxy.ps1`: Archived proxy scripts.
 
-3.  **Legacy Proxies**:
-    *   Historically, this repository contained proxy scripts for connecting to the instances (`cloudX-proxy.sh` and `cloudx-proxy.ps1`).
+    *   Historically, this repository contained proxy scripts for connecting to the instances.
     *   These have been moved to a dedicated repository: `cloudX-proxy`.
 
 ## Naming Convention

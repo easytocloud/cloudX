@@ -17,7 +17,7 @@ This layer deploys the actual development workstations. It is deployed for each 
     - UserData: Configures the environment using embedded scripts and CloudFormation Init metadata.
 - **Configuration**:
     - Reads parameters from the Environment Layer via SSM.
-    - Uses tags to control software installation (e.g., `brew`, `docker`, `zsh`).
+    - Uses CloudFormation parameters to control software installation (e.g., `NVM`, `DOCKER`, `PIP`).
 
 ## 3. User Layer (`cloudX-user.yaml`) - Optional
 This layer manages IAM credentials for developers who don't have existing access.
