@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.3](https://github.com/easytocloud/cloudX/compare/v1.3.2...v1.3.3) (2025-11-21)
+
+
+### Bug Fixes
+
+* trigger release for repository restructuring ([345ecb8](https://github.com/easytocloud/cloudX/commit/345ecb84f01f7be5c123d65c2f69b32a20f3cfb2))
+
 ## [1.3.2](https://github.com/easytocloud/cloudX/compare/v1.3.1...v1.3.2) (2025-11-18)
 
 
