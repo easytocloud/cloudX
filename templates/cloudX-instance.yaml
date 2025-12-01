@@ -483,10 +483,16 @@ Resources:
                 sso_region = eu-west-1
                 sso_registration_scopes = sso:account:access
 
+                [profile default]
+                sso_session = sso
+                region = eu-west-1
+                output = json
+                
                 [profile sso-browser]
                 sso_session = sso
                 region = eu-west-1
                 output = json
+
               owner: ec2-user
               group: ec2-user
               mode: '000600'
