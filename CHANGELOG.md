@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.6](https://github.com/easytocloud/cloudX/compare/v1.3.5...v1.3.6) (2025-12-01)
+
+
+### Bug Fixes
+
+* added default profile in generated .aws/config ([316bc0f](https://github.com/easytocloud/cloudX/commit/316bc0ff83afdb9d1eb808d94d80b1088dd6f917))
+
 ## [1.3.5](https://github.com/easytocloud/cloudX/compare/v1.3.4...v1.3.5) (2025-11-21)
 
 
