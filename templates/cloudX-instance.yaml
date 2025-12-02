@@ -58,7 +58,8 @@ Parameters:
     Type: String
     Description: The instance type to use.
     Default: t3.large
-    AllowedValues: 
+    AllowedValues:
+      # CUSTOMIZATION_MARKER:InstanceType - Add or remove AllowedValues here. Ensure new types are added to InstanceArchMap.
       - 't3.large'
       - 't3.xlarge'
       - 't3.2xlarge'
@@ -67,6 +68,21 @@ Parameters:
       - 't3a.2xlarge'
       - 'm5.xlarge'
       - 'm5.2xlarge'
+      - 't4g.large'
+      - 't4g.xlarge'
+      - 't4g.2xlarge'
+      - 'm6g.xlarge'
+      - 'm6g.2xlarge'
+
+  LatestAmiIdX86:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64'
+    Description: 'SSM Parameter for x86_64 AMI'
+
+  LatestAmiIdArm:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-arm64'
+    Description: 'SSM Parameter for arm64 AMI'
 
   VolumeSize:
     Type: Number
@@ -107,12 +123,44 @@ Parameters:
     Default: 'true'
     AllowedValues: ['true', 'false']
 
+Mappings:
+  InstanceArchMap:
+    # x86_64 instances
+    t3.large:
+      Arch: x86_64
+    t3.xlarge:
+      Arch: x86_64
+    t3.2xlarge:
+      Arch: x86_64
+    t3a.large:
+      Arch: x86_64
+    t3a.xlarge:
+      Arch: x86_64
+    t3a.2xlarge:
+      Arch: x86_64
+    m5.xlarge:
+      Arch: x86_64
+    m5.2xlarge:
+      Arch: x86_64
+    # arm64 instances
+    t4g.large:
+      Arch: arm64
+    t4g.xlarge:
+      Arch: arm64
+    t4g.2xlarge:
+      Arch: arm64
+    m6g.xlarge:
+      Arch: arm64
+    m6g.2xlarge:
+      Arch: arm64
+
 Conditions:
   InstallDocker: !Equals [!Ref DOCKER, 'true']
   InstallNvm: !Equals [!Ref NVM, 'true']
   InstallPip: !Equals [!Ref PIP, 'true']
   InstallPrivpage: !Equals [!Ref PRIVPAGE, 'true']
   InstallFortools: !Equals [!Ref FORTOOLS, 'true']
+  IsArm: !Equals [!FindInMap [InstanceArchMap, !Ref InstanceType, Arch], 'arm64']
   
 Resources:
   EC2Instance:
@@ -482,6 +530,7 @@ Resources:
                 sso_start_url = https://{{resolve:ssm:/cloudX/${EnvironmentName}/SSODomain}}/start#/
                 sso_region = eu-west-1
                 sso_registration_scopes = sso:account:access
+                sso_token_provider = aws-toolkit
 
                 [profile default]
                 sso_session = sso
@@ -492,7 +541,8 @@ Resources:
                 sso_session = sso
                 region = eu-west-1
                 output = json
-
+                
+                
               owner: ec2-user
               group: ec2-user
               mode: '000600'
@@ -764,7 +814,7 @@ Resources:
       ResourceSignal:
         Timeout: PT30M
     Properties:
-      ImageId: '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64}}'
+      ImageId: !If [ IsArm, !Ref LatestAmiIdArm, !Ref LatestAmiIdX86 ]
       InstanceType: !Ref InstanceType
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
