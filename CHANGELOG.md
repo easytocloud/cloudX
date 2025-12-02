@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0](https://github.com/easytocloud/cloudX/compare/v1.3.6...v1.4.0) (2025-12-02)
+
+
+### Features
+
+* added arm64 supported instance types ([2e760dd](https://github.com/easytocloud/cloudX/commit/2e760dd1fa387244d48c7f0e7f20eff045a89382))
+
 ## [1.3.6](https://github.com/easytocloud/cloudX/compare/v1.3.5...v1.3.6) (2025-12-01)
 
 
