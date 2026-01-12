@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.1](https://github.com/easytocloud/cloudX/compare/v1.4.0...v1.4.1) (2026-01-12)
+
+
+### Bug Fixes
+
+* usermod full path in docker install ([083b2d3](https://github.com/easytocloud/cloudX/commit/083b2d33d9cdc62486955e0aa2deb1dfe3462aa4))
+
 ## [1.4.0](https://github.com/easytocloud/cloudX/compare/v1.3.6...v1.4.0) (2025-12-02)
 
 
