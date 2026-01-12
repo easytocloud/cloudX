@@ -794,11 +794,12 @@ Resources:
               env:
                 INSTALL_DOCKER: !If [InstallDocker, 'true', 'false']
               command: |
+                echo "Current PATH: $PATH" >> /var/log/cfn-init.log
                 if [ "$INSTALL_DOCKER" = "true" ]; then
                   if ! command -v docker &> /dev/null; then
                     yum install -y docker
                   fi
-                  usermod -a -G docker ec2-user
+                  /usr/sbin/usermod -a -G docker ec2-user
                   systemctl enable docker
                   systemctl start docker
                 else
