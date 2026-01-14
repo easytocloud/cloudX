@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0](https://github.com/easytocloud/cloudX/compare/v1.4.1...v1.5.0) (2026-01-14)
+
+
+### Features
+
+* add ruby, gem and yq to base packages ([cb3388d](https://github.com/easytocloud/cloudX/commit/cb3388d9a7608a94c057207a03e1941758618e9c))
+
 ## [1.4.1](https://github.com/easytocloud/cloudX/compare/v1.4.0...v1.4.1) (2026-01-12)
 
 
