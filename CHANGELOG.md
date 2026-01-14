@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.2](https://github.com/easytocloud/cloudX/compare/v1.5.1...v1.5.2) (2026-01-14)
+
+
+### Bug Fixes
+
+* removed gem installation as it is now part of ruby package ([327cde8](https://github.com/easytocloud/cloudX/commit/327cde8198a7e042f3a056392e58a1df1a62f2ea))
+
 ## [1.5.1](https://github.com/easytocloud/cloudX/compare/v1.5.0...v1.5.1) (2026-01-14)
 
 
