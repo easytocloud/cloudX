@@ -183,7 +183,6 @@ Resources:
               util-linux-user: []
               wget: []
               ruby: []
-              gem: []
           commands:
             00UpdatePackages:
               command: yum update -y
