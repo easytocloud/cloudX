@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1](https://github.com/easytocloud/cloudX/compare/v1.5.0...v1.5.1) (2026-01-14)
+
+
+### Bug Fixes
+
+* remove unavailable package ruby-devel ([c01fa4d](https://github.com/easytocloud/cloudX/commit/c01fa4de340c6860711a358201eb88f79bb0d8b3))
+
 ## [1.5.0](https://github.com/easytocloud/cloudX/compare/v1.4.1...v1.5.0) (2026-01-14)
 
 
