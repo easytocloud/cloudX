@@ -182,7 +182,6 @@ Resources:
               yq: []
               util-linux-user: []
               wget: []
-              ruby: []
           commands:
             00UpdatePackages:
               command: yum update -y
@@ -193,7 +192,13 @@ Resources:
                 else
                   echo "Development Tools group already installed"
                 fi
-            02PrepareWorkspace:
+            02InstallRubyAndGem:
+              command: |
+                echo "Installing Ruby and RubyGems..."
+                yum install -y ruby ruby-devel rubygems
+                ruby --version
+                gem --version
+            03PrepareWorkspace:
               command: |
                 mkdir -p /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.config/direnv/lib
                 touch /home/ec2-user/.install-running
