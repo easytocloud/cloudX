@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.3](https://github.com/easytocloud/cloudX/compare/v1.5.2...v1.5.3) (2026-01-14)
+
+
+### Bug Fixes
+
+* moved ruby from base to additional packages ([092aaec](https://github.com/easytocloud/cloudX/commit/092aaece1d5c7179ac05bd6afe3c51880b9e7686))
+
 ## [1.5.2](https://github.com/easytocloud/cloudX/compare/v1.5.1...v1.5.2) (2026-01-14)
 
 
