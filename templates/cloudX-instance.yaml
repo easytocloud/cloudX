@@ -179,8 +179,12 @@ Resources:
             yum:
               git: []
               jq: []
+              yq: []
               util-linux-user: []
               wget: []
+              ruby: []
+              gem: []
+              ruby-devel: []
           commands:
             00UpdatePackages:
               command: yum update -y
