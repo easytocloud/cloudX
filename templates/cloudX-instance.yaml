@@ -403,6 +403,7 @@ Resources:
                         if ! command -v zsh &> /dev/null || [ ! -d ~/.oh-my-zsh ]; then
                             echo "Installing zsh and oh-my-zsh..."
                             brew install zsh
+                            cd /home/ec2-user || exit 1
                             sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
                             sh -c "$(curl -fsSL https://raw.githubusercontent.com/easytocloud/oh-my-easytocloud/main/install.sh)"                            
                             sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="easytocloud"/' /home/ec2-user/.zshrc
