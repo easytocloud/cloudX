@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.4](https://github.com/easytocloud/cloudX/compare/v1.5.3...v1.5.4) (2026-01-22)
+
+
+### Bug Fixes
+
+* improved oh-my-zsh installation ([59e769a](https://github.com/easytocloud/cloudX/commit/59e769aac4a84f6625e56032f791d1bab2d8e5c2))
+* improved oh-my-zsh installation ([5bc97eb](https://github.com/easytocloud/cloudX/commit/5bc97ebfae5bd07a75c8de339cce216050c1c714))
+
 ## [1.5.3](https://github.com/easytocloud/cloudX/compare/v1.5.2...v1.5.3) (2026-01-14)
 
 
