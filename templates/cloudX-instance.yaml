@@ -402,14 +402,11 @@ Resources:
                     ensure_zsh_stack() {
                         if ! command -v zsh &> /dev/null || [ ! -d ~/.oh-my-zsh ]; then
                             echo "Installing zsh and oh-my-zsh..."
-                            brew install zsh
+                            brew install zsh easytocloud/tap/sso-tools
                             cd /home/ec2-user || exit 1
                             sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
                             sh -c "$(curl -fsSL https://raw.githubusercontent.com/easytocloud/oh-my-easytocloud/main/install.sh)"                            
-                            sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="easytocloud"/' /home/ec2-user/.zshrc
-                            # add easytocloud to zsh plugins, regardless of existing plugins
-                            sed -i 's/^plugins=(\(.*\))/plugins=(\1 easytocloud)/' /home/ec2-user/.zshrc
-
+                            
                             echo '/home/linuxbrew/.linuxbrew/bin/zsh' | sudo tee -a /etc/shells >/dev/null
                         else
                             echo "zsh already installed"
@@ -482,7 +479,6 @@ Resources:
                         append_unique_line "$bashrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
                         append_unique_line "$bashrc" 'eval "$(direnv hook bash)"'
                         append_unique_line "$bashrc" "complete -C '/usr/bin/aws_completer' aws"
-                        append_unique_line "$bashrc" "alias ssostart='aws sso login --sso-session sso'"
 
                         if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
                             append_unique_line "$bashrc" 'export AWS_PAGER=privpage'
@@ -497,7 +493,6 @@ Resources:
 
                         append_unique_line "$zshrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
                         append_unique_line "$zshrc" 'eval "$(direnv hook zsh)"'
-                        append_unique_line "$zshrc" "alias ssostart='aws sso login --sso-session sso'"
 
                         if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
                             append_unique_line "$zshrc" 'export AWS_PAGER=privpage'
