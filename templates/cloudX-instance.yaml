@@ -498,6 +498,15 @@ Resources:
                             append_unique_line "$zshrc" 'export AWS_PAGER=privpage'
                         fi
 
+                        if [[ "$INSTALL_PIP" == "true" ]]; then
+                            append_unique_line "$zshrc" 'export PATH="$HOME/.local/bin:$PATH"'
+                        fi
+
+                        if [[ "$INSTALL_NVM" == "true" ]]; then
+                            append_unique_line "$zshrc" 'export NVM_DIR="$HOME/.nvm"'
+                            append_unique_line "$zshrc" '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+                        fi
+
                         if ! grep -q "bashcompinit" "$zshrc" 2>/dev/null; then
                             {
                                 echo 'autoload bashcompinit && bashcompinit'
