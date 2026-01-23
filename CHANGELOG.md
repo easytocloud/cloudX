@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.6](https://github.com/easytocloud/cloudX/compare/v1.5.5...v1.5.6) (2026-01-23)
+
+
+### Bug Fixes
+
+* repair nvm installation ([08a4007](https://github.com/easytocloud/cloudX/commit/08a40076e64dd914be606b305dd8f753523f8880))
+
 ## [1.5.5](https://github.com/easytocloud/cloudX/compare/v1.5.4...v1.5.5) (2026-01-23)
 
 
