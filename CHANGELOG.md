@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.5](https://github.com/easytocloud/cloudX/compare/v1.5.4...v1.5.5) (2026-01-23)
+
+
+### Bug Fixes
+
+* improved installer for oh-my-easytocloud ([e25c40a](https://github.com/easytocloud/cloudX/commit/e25c40ab1d3a302b57b24177d3fce2f440838562))
+
 ## [1.5.4](https://github.com/easytocloud/cloudX/compare/v1.5.3...v1.5.4) (2026-01-22)
 
 
