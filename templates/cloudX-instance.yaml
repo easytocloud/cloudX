@@ -9,6 +9,7 @@ Metadata:
         Parameters:
           - UserName
           - EnvironmentName
+          - SSHHostName
           - InstanceType
           - VolumeSize
           - ShutdownTimeout
@@ -25,6 +26,8 @@ Metadata:
         default: CloudX User name (without prefix)
       EnvironmentName:
         default: CloudX Environment name
+      SSHHostName:
+        default: SSH Host Name (will be prefixed with cloudX-{Environment}-)
       InstanceType:
         default: EC2 Instance type
       VolumeSize:
@@ -53,6 +56,15 @@ Parameters:
     Default: 'OTA'
     Description: 'Name of the CloudX environment'
     # CUSTOMIZATION_MARKER:EnvironmentName - Add AllowedValues or other constraints here
+
+  SSHHostName:
+    Type: String
+    Default: ''
+    Description: >-
+      Short name for SSH access to this instance. The actual SSH hostname will be
+      cloudX-{Environment}-{SSHHostName}. For example, if you enter "myserver" and the
+      Environment is "Prod", you will connect using: ssh cloudX-Prod-myserver.
+      This name will be picked up automatically by cloudX-proxy setup.
 
   InstanceType:
     Type: String
@@ -854,7 +866,7 @@ Resources:
       
       Tags:
         - Key: Name
-          Value: !Sub "cloudX for ${UserName}"
+          Value: !Sub "cloudX-${EnvironmentName}-${SSHHostName} | ${UserName}"
         - Key: Environment
           Value: !Sub "${EnvironmentName}"
         - Key: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/AbacTag}}'
