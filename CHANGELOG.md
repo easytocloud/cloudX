@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.7](https://github.com/easytocloud/cloudX/compare/v1.5.6...v1.5.7) (2026-01-24)
+
+
+### Bug Fixes
+
+* added ssh hostname field for use with cloudX-proxy ([64c180e](https://github.com/easytocloud/cloudX/commit/64c180ea55aed13817ecc30dedb33f98aa4ea494))
+
 ## [1.5.6](https://github.com/easytocloud/cloudX/compare/v1.5.5...v1.5.6) (2026-01-23)
 
 
