@@ -186,6 +186,8 @@ Resources:
             - 20_user
             - 30_post
             # CUSTOMIZATION_MARKER:configSets - Add custom configSets here
+            # Custom configSets run after 30_post. Use add-to-rc in your commands to
+            # add shell config — see CUSTOMIZATION_MARKER:configSetDefinitions for details.
         00_base:
           packages:
             yum:
@@ -213,8 +215,9 @@ Resources:
             03PrepareWorkspace:
               command: |
                 mkdir -p /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.config/direnv/lib
-                touch /home/ec2-user/.install-running
-                chown -R ec2-user:ec2-user /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.config /home/ec2-user/.install-running
+                touch /home/ec2-user/.install-running /home/ec2-user/.cloudxrc /home/ec2-user/.cloudx.bash /home/ec2-user/.cloudx.zsh
+                chown -R ec2-user:ec2-user /home/ec2-user/.cloudX /home/ec2-user/.aws /home/ec2-user/.config
+                chown    ec2-user:ec2-user /home/ec2-user/environment /home/ec2-user/.install-running /home/ec2-user/.cloudxrc /home/ec2-user/.cloudx.bash /home/ec2-user/.cloudx.zsh
         10_autoshutdown:
           files:
             /home/ec2-user/.cloudX/autoshutdown-configuration:
@@ -362,6 +365,80 @@ Resources:
                 ensureRunning: true
         20_user:
           files:
+            /usr/local/bin/add-to-rc:
+              content: |
+                #!/bin/bash
+                # add-to-rc - Manage named blocks in shell rc files
+                #
+                # Usage:
+                #   add-to-rc [OPTIONS] <name> [line ...]
+                #   echo "content" | add-to-rc [OPTIONS] <name>
+                #
+                # Options:
+                #   --bash         Write to ~/.cloudx.bash  (bash-specific config)
+                #   --zsh          Write to ~/.cloudx.zsh   (zsh-specific config)
+                #   --file <path>  Write to a specific file
+                #   --remove       Remove the named block
+                #
+                # Default target: ~/.cloudxrc  (sourced by all shells)
+                #
+                # Blocks in the target file look like:
+                #   # BEGIN:<name>
+                #   ...content...
+                #   # END:<name>
+                #
+                # Re-running with the same <name> replaces the existing block (upsert).
+
+                set -euo pipefail
+
+                TARGET="${HOME}/.cloudxrc"
+                REMOVE=false
+
+                while [[ $# -gt 0 ]]; do
+                    case "$1" in
+                        --bash)   TARGET="${HOME}/.cloudx.bash"; shift ;;
+                        --zsh)    TARGET="${HOME}/.cloudx.zsh";  shift ;;
+                        --file)   TARGET="$2"; shift 2 ;;
+                        --remove) REMOVE=true; shift ;;
+                        --)       shift; break ;;
+                        -*)       echo "add-to-rc: unknown option: $1" >&2; exit 1 ;;
+                        *)        break ;;
+                    esac
+                done
+
+                [[ $# -ge 1 ]] || { echo "add-to-rc: <name> argument required" >&2; exit 1; }
+
+                NAME="$1"; shift
+                BEGIN_MARKER="# BEGIN:${NAME}"
+                END_MARKER="# END:${NAME}"
+
+                touch "$TARGET"
+
+                # Remove existing block if present (awk is portable across GNU/BSD)
+                if grep -qF "$BEGIN_MARKER" "$TARGET" 2>/dev/null; then
+                    awk -v b="$BEGIN_MARKER" -v e="$END_MARKER" \
+                        '$0==b{skip=1;next} $0==e{skip=0;next} !skip' \
+                        "$TARGET" > "${TARGET}.tmp" && mv "${TARGET}.tmp" "$TARGET"
+                fi
+
+                [[ "$REMOVE" == true ]] && exit 0
+
+                # Collect content: remaining args (one line each) or stdin
+                if [[ $# -gt 0 ]]; then
+                    CONTENT=$(printf '%s\n' "$@")
+                else
+                    CONTENT=$(cat)
+                fi
+
+                # Append the named block
+                {
+                    printf '\n%s\n' "$BEGIN_MARKER"
+                    printf '%s\n' "$CONTENT"
+                    printf '%s\n' "$END_MARKER"
+                } >> "$TARGET"
+              owner: root
+              group: root
+              mode: '000755'
             /tmp/cloudx-user-bootstrap.sh:
               content: !Sub
                 - |
@@ -479,52 +556,50 @@ Resources:
                         fi
                     }
 
-                    append_unique_line() {
-                        local file="$1"
-                        local line="$2"
-                        grep -qxF "$line" "$file" 2>/dev/null || echo "$line" >> "$file"
-                    }
-
-                    update_bashrc() {
+                    setup_rc_files() {
                         local bashrc="$EC2_USER_HOME/.bashrc"
-                        touch "$bashrc"
-                        append_unique_line "$bashrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
-                        append_unique_line "$bashrc" 'eval "$(direnv hook bash)"'
-                        append_unique_line "$bashrc" "complete -C '/usr/bin/aws_completer' aws"
-
-                        if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
-                            append_unique_line "$bashrc" 'export AWS_PAGER=privpage'
-                        fi
-                    }
-
-                    update_zshrc() {
                         local zshrc="$EC2_USER_HOME/.zshrc"
-                        if [ ! -f "$zshrc" ]; then
-                            return
+
+                        # Wire .bashrc to source the cloudX rc files
+                        add-to-rc --file "$bashrc" cloudxrc \
+                            '[ -f "${HOME}/.cloudxrc" ]    && . "${HOME}/.cloudxrc"' \
+                            '[ -f "${HOME}/.cloudx.bash" ] && . "${HOME}/.cloudx.bash"'
+
+                        # Wire .zshrc to source the cloudX rc files (created by ensure_zsh_stack)
+                        if [ -f "$zshrc" ]; then
+                            add-to-rc --file "$zshrc" cloudxrc \
+                                '[ -f "${HOME}/.cloudxrc" ]   && . "${HOME}/.cloudxrc"' \
+                                '[ -f "${HOME}/.cloudx.zsh" ] && . "${HOME}/.cloudx.zsh"'
                         fi
 
-                        append_unique_line "$zshrc" 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
-                        append_unique_line "$zshrc" 'eval "$(direnv hook zsh)"'
+                        # Common: Homebrew shell env (both bash and zsh)
+                        add-to-rc brew \
+                            'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
+
+                        # Shell-specific: direnv hook
+                        add-to-rc --bash direnv 'eval "$(direnv hook bash)"'
+                        add-to-rc --zsh  direnv 'eval "$(direnv hook zsh)"'
+
+                        # Shell-specific: AWS CLI completion
+                        add-to-rc --bash aws-complete \
+                            "complete -C '/usr/bin/aws_completer' aws"
+                        add-to-rc --zsh aws-complete \
+                            'autoload bashcompinit && bashcompinit' \
+                            'autoload -Uz compinit && compinit' \
+                            "complete -C '/usr/bin/aws_completer' aws"
 
                         if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
-                            append_unique_line "$zshrc" 'export AWS_PAGER=privpage'
+                            add-to-rc privpage 'export AWS_PAGER=privpage'
                         fi
 
                         if [[ "$INSTALL_PIP" == "true" ]]; then
-                            append_unique_line "$zshrc" 'export PATH="$HOME/.local/bin:$PATH"'
+                            add-to-rc pip 'export PATH="$HOME/.local/bin:$PATH"'
                         fi
 
                         if [[ "$INSTALL_NVM" == "true" ]]; then
-                            append_unique_line "$zshrc" 'export NVM_DIR="$HOME/.nvm"'
-                            append_unique_line "$zshrc" '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
-                        fi
-
-                        if ! grep -q "bashcompinit" "$zshrc" 2>/dev/null; then
-                            {
-                                echo 'autoload bashcompinit && bashcompinit'
-                                echo 'autoload -Uz compinit && compinit'
-                                echo "complete -C '/usr/bin/aws_completer' aws"
-                            } >> "$zshrc"
+                            add-to-rc nvm \
+                                'export NVM_DIR="$HOME/.nvm"' \
+                                '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
                         fi
                     }
 
@@ -538,8 +613,7 @@ Resources:
                         install_pip_stack
                         install_nvm_stack
                         install_privpage_stack
-                        update_bashrc
-                        update_zshrc
+                        setup_rc_files
                     }
 
                     main_user_setup
@@ -838,6 +912,39 @@ Resources:
                 rm -f /home/ec2-user/.install-running
                 chown ec2-user:ec2-user /home/ec2-user/.install-done
         # CUSTOMIZATION_MARKER:configSetDefinitions - Add custom configSet definitions here
+        #
+        # Shell rc integration via add-to-rc
+        # -----------------------------------
+        # /usr/local/bin/add-to-rc is installed by 20_user and available to all configSets
+        # that run after it. Use it to add named, upsert-safe blocks to the cloudX rc files.
+        #
+        # Target files (sourced automatically by .bashrc / .zshrc):
+        #   ~/.cloudxrc      — loaded by both bash and zsh
+        #   ~/.cloudx.bash   — loaded by bash only   (use: add-to-rc --bash <name> ...)
+        #   ~/.cloudx.zsh    — loaded by zsh only    (use: add-to-rc --zsh  <name> ...)
+        #
+        # Usage in a configSet command (run as ec2-user):
+        #
+        #   # Single line → ~/.cloudxrc
+        #   add-to-rc mytool 'export MYTOOL_HOME=/opt/mytool'
+        #
+        #   # Multiple lines → ~/.cloudxrc  (each positional arg becomes one line)
+        #   add-to-rc mytool \
+        #     'export MYTOOL_HOME=/opt/mytool' \
+        #     'export PATH="$MYTOOL_HOME/bin:$PATH"'
+        #
+        #   # Pipe content → ~/.cloudxrc
+        #   echo 'export MYTOOL_HOME=/opt/mytool' | add-to-rc mytool
+        #
+        #   # Shell-specific
+        #   add-to-rc --bash mytool 'eval "$(mytool init bash)"'
+        #   add-to-rc --zsh  mytool 'eval "$(mytool init zsh)"'
+        #
+        #   # Remove a block
+        #   add-to-rc --remove mytool
+        #
+        # The <name> is used as the block marker (# BEGIN:<name> / # END:<name>).
+        # Re-running with the same name replaces the block — safe to call on re-provisioning.
     CreationPolicy:
       ResourceSignal:
         Timeout: PT30M
