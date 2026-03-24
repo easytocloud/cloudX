@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0](https://github.com/easytocloud/cloudX/compare/v1.5.7...v1.6.0) (2026-03-24)
+
+
+### Features
+
+* introduce add-to-rc for upsert-safe shell rc management ([213f55a](https://github.com/easytocloud/cloudX/commit/213f55ad71e769f50e84b68fc9070756ce0a4b66))
+
 ## [1.5.7](https://github.com/easytocloud/cloudX/compare/v1.5.6...v1.5.7) (2026-01-24)
 
 
