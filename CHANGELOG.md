@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.1](https://github.com/easytocloud/cloudX/compare/v1.6.0...v1.6.1) (2026-03-24)
+
+
+### Bug Fixes
+
+* escape \${HOME} in !Sub block to prevent CloudFormation substitution error ([ff5d799](https://github.com/easytocloud/cloudX/commit/ff5d7999cc153277da0d64ec5da7ed5d06d16fc6))
+
 ## [1.6.0](https://github.com/easytocloud/cloudX/compare/v1.5.7...v1.6.0) (2026-03-24)
 
 
