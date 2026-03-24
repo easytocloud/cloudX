@@ -562,14 +562,14 @@ Resources:
 
                         # Wire .bashrc to source the cloudX rc files
                         add-to-rc --file "$bashrc" cloudxrc \
-                            '[ -f "${HOME}/.cloudxrc" ]    && . "${HOME}/.cloudxrc"' \
-                            '[ -f "${HOME}/.cloudx.bash" ] && . "${HOME}/.cloudx.bash"'
+                            '[ -f "${!HOME}/.cloudxrc" ]    && . "${!HOME}/.cloudxrc"' \
+                            '[ -f "${!HOME}/.cloudx.bash" ] && . "${!HOME}/.cloudx.bash"'
 
                         # Wire .zshrc to source the cloudX rc files (created by ensure_zsh_stack)
                         if [ -f "$zshrc" ]; then
                             add-to-rc --file "$zshrc" cloudxrc \
-                                '[ -f "${HOME}/.cloudxrc" ]   && . "${HOME}/.cloudxrc"' \
-                                '[ -f "${HOME}/.cloudx.zsh" ] && . "${HOME}/.cloudx.zsh"'
+                                '[ -f "${!HOME}/.cloudxrc" ]   && . "${!HOME}/.cloudxrc"' \
+                                '[ -f "${!HOME}/.cloudx.zsh" ] && . "${!HOME}/.cloudx.zsh"'
                         fi
 
                         # Common: Homebrew shell env (both bash and zsh)
