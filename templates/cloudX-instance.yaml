@@ -582,11 +582,11 @@ Resources:
 
                         # Shell-specific: AWS CLI completion
                         add-to-rc --bash aws-complete \
-                            "complete -C '/usr/bin/aws_completer' aws"
+                            'complete -C aws_completer aws'
                         add-to-rc --zsh aws-complete \
                             'autoload bashcompinit && bashcompinit' \
                             'autoload -Uz compinit && compinit' \
-                            "complete -C '/usr/bin/aws_completer' aws"
+                            'complete -C aws_completer aws'
 
                         if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
                             add-to-rc privpage 'export AWS_PAGER=privpage'
@@ -642,7 +642,8 @@ Resources:
                 sso_session = sso
                 region = eu-west-1
                 output = json
-                
+                sso_account_id = "REPLACE WITH YOU MAIN ACCOUNT ID"
+                sso_role_name = "REPLACE WITH YOUR SSO READONLY ROLE NAME"
                 
               owner: ec2-user
               group: ec2-user
