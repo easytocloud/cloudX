@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.2](https://github.com/easytocloud/cloudX/compare/v1.6.1...v1.6.2) (2026-03-29)
+
+
+### Bug Fixes
+
+* use PATH-resolved aws_completer instead of absolute path ([c35a76f](https://github.com/easytocloud/cloudX/commit/c35a76f7f5671473829467873106e2d7aab5b9c5))
+
 ## [1.6.1](https://github.com/easytocloud/cloudX/compare/v1.6.0...v1.6.1) (2026-03-24)
 
 
