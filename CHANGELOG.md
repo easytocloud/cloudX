@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.4](https://github.com/easytocloud/cloudX/compare/v1.6.3...v1.6.4) (2026-04-12)
+
+
+### Bug Fixes
+
+* removed smallest instance models ([0e976f5](https://github.com/easytocloud/cloudX/commit/0e976f5d59fb7370dbad523ef2b5076fb8338290))
+
 ## [1.6.3](https://github.com/easytocloud/cloudX/compare/v1.6.2...v1.6.3) (2026-04-12)
 
 
