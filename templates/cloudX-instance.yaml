@@ -78,7 +78,6 @@ Parameters:
       - 't3a.2xlarge'
       - 'm5.xlarge'
       - 'm5.2xlarge'
-      - 't4g.large'
       - 't4g.xlarge'
       - 't4g.2xlarge'
       - 'm6g.xlarge'
@@ -136,13 +135,9 @@ Parameters:
 Mappings:
   InstanceArchMap:
     # x86_64 instances
-    t3.large:
-      Arch: x86_64
     t3.xlarge:
       Arch: x86_64
     t3.2xlarge:
-      Arch: x86_64
-    t3a.large:
       Arch: x86_64
     t3a.xlarge:
       Arch: x86_64
@@ -153,8 +148,6 @@ Mappings:
     m5.2xlarge:
       Arch: x86_64
     # arm64 instances
-    t4g.large:
-      Arch: arm64
     t4g.xlarge:
       Arch: arm64
     t4g.2xlarge:
