@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.5](https://github.com/easytocloud/cloudX/compare/v1.6.4...v1.6.5) (2026-05-13)
+
+
+### Bug Fixes
+
+* update default instance type ([ef9e4a7](https://github.com/easytocloud/cloudX/commit/ef9e4a703408de4c83610db8ff579dbd0b4412d1))
+
 ## [1.6.4](https://github.com/easytocloud/cloudX/compare/v1.6.3...v1.6.4) (2026-04-12)
 
 
