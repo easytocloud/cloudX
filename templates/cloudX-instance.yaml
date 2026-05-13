@@ -68,8 +68,8 @@ Parameters:
 
   InstanceType:
     Type: String
-    Description: The instance type to use. (recommended: 4 vCPU or more for best experience)
-    Default: t3.xlarge
+    Description: "The instance type to use. (recommended: 4 vCPU or more for best experience)"
+    Default: t3.2xlarge
     AllowedValues:
       # CUSTOMIZATION_MARKER:InstanceType - Add or remove AllowedValues here. Ensure new types are added to InstanceArchMap.  
       - 't3.xlarge'
