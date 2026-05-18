@@ -1,18 +1,30 @@
 # CloudX Template Customization Pattern
 
-This document describes how to create customized versions of the cloudX instance template while maintaining synchronization with upstream changes.
+This document describes how to create customized versions of the cloudX templates while maintaining synchronization with upstream changes.
 
 ## Overview
 
-The cloudX instance template includes **customization markers** that allow teams to maintain their own customized versions while automatically inheriting improvements and updates from the opensource template.
+The cloudX templates include **customization markers** that allow teams to maintain their own customized versions while automatically inheriting improvements and updates from the opensource template.
 
 This pattern enables organizations to add their own configurations while staying synchronized with the upstream opensource template.
 
 ## Customization Markers
 
-The template includes three customization markers:
+### Where each marker lives
 
-### 1. EnvironmentName Parameter
+| Marker | Template | Purpose |
+|--------|----------|---------|
+| `CUSTOMIZATION_MARKER:EnvironmentName` | `cloudX-instance.yaml` | Restrict allowed environment names |
+| `CUSTOMIZATION_MARKER:InstanceType` | `cloudX-instance.yaml` | Restrict or extend allowed instance types |
+| `CUSTOMIZATION_MARKER:configSets` | `cloudX-environment.yaml` | Add custom SSM document steps |
+| `CUSTOMIZATION_MARKER:configSetDefinitions` | `cloudX-environment.yaml` | Implement custom SSM document steps |
+
+> **Note:** As of the SSM State Manager migration, installation logic lives in `cloudX-environment.yaml` (the `CloudXSetupDocument` resource). Step-based customizations target that template, not the instance template.
+
+---
+
+### 1. EnvironmentName Parameter (`cloudX-instance.yaml`)
+
 ```yaml
   EnvironmentName:
     Type: String
@@ -31,53 +43,52 @@ The template includes three customization markers:
       - 'custom'
 ```
 
-### 2. ConfigSets
+---
+
+### 2. InstanceType Allowed Values (`cloudX-instance.yaml`)
+
 ```yaml
-        configSets:
-          default:
-            - 00_base
-            - 10_autoshutdown
-            - 20_user
-            - 30_post
-            # CUSTOMIZATION_MARKER:configSets - Add custom configSets here
+    AllowedValues:
+      # CUSTOMIZATION_MARKER:InstanceType - Add or remove AllowedValues here. Ensure new types are added to InstanceArchMap.
+      - 't3.xlarge'
+      ...
 ```
 
-**Purpose**: Add custom configSets to the default execution order.
+**Purpose**: Add or remove allowed instance types. When adding a new type, also add it to the `InstanceArchMap` mapping.
 
-**Example Customization**:
+---
+
+### 3. Custom SSM Document Steps (`cloudX-environment.yaml`)
+
+Installation and configuration logic runs as SSM State Manager document steps inside `CloudXSetupDocument`. To add organization-specific setup steps, append to the `mainSteps` list after the built-in `post` step:
+
 ```yaml
-            - 50_custom
-            - 60_organization
+        mainSteps:
+          ...
+          - name: post
+            ...
+          # CUSTOMIZATION_MARKER:configSets - Add custom mainSteps here (after the 'post' step)
+          # CUSTOMIZATION_MARKER:configSetDefinitions - Each SSM mainStep contains both name and runCommand inline.
 ```
 
-### 3. ConfigSet Definitions
+**Example — adding a custom step**:
 ```yaml
-            30Finalize:
-              command: |
-                touch /home/ec2-user/.install-done
-                rm -f /home/ec2-user/.install-running
-                chown ec2-user:ec2-user /home/ec2-user/.install-done
-        # CUSTOMIZATION_MARKER:configSetDefinitions - Add custom configSet definitions here
-    CreationPolicy:
+          - name: my_custom_step
+            action: aws:runShellScript
+            inputs:
+              runCommand:
+                - su - ec2-user -c 'add-to-rc mytool "export MYTOOL_HOME=/opt/mytool"'
+                - su - ec2-user -c 'add-to-rc --bash mytool "eval \"$(mytool init bash)\""'
 ```
 
-**Purpose**: Define the implementation of custom configSets.
+**Key difference from the old cfn-init pattern**: each step is a `aws:runShellScript` block with inline `runCommand` commands. There are no separate `files:`, `packages:`, `commands:`, or `services:` keys. Write files using heredocs, install packages with `yum`, and enable services with `systemctl`.
 
-**Example Customization**:
-```yaml
-        50_custom:
-          files:
-            /home/ec2-user/.config/custom/config.conf:
-              content: |
-                # Custom configuration
-                key=value
-              mode: '000644'
-              owner: ec2-user
-              group: ec2-user
-          commands:
-            00ApplyCustomConfig:
-              command: /tmp/apply-custom-config.sh
-```
+**Shell rc integration via `add-to-rc`**:
+- `add-to-rc` is installed early in the document and available to all subsequent steps
+- Blocks are idempotent (upsert) — safe to re-run on every State Manager execution
+- Target files: `~/.cloudxrc` (all shells), `~/.cloudx.bash` (bash only), `~/.cloudx.zsh` (zsh only)
+
+---
 
 ## Implementation Pattern
 
@@ -95,26 +106,16 @@ EnvironmentName:
     - 'staging'
     - 'prod'
 
-# ConfigSets customization
-configSets:
-  - 50_myorg
-
-# ConfigSet definitions
-configSetDefinitions: |
-  50_myorg:
-    files:
-      /home/ec2-user/.config/myorg/settings.conf:
-        content: |
-          # Organization-specific settings
-          org_name="MyOrg"
-          region="us-west-2"
-        mode: '000644'
-        owner: ec2-user
-        group: ec2-user
-    commands:
-      00ConfigureOrg:
-        command: echo "Organization configuration applied"
+# Custom SSM document steps (appended after 'post' step in cloudX-environment.yaml)
+customSteps: |
+  - name: myorg_setup
+    action: aws:runShellScript
+    inputs:
+      runCommand:
+        - su - ec2-user -c 'add-to-rc myorg "export MYORG_ENV=production"'
 ```
+
+---
 
 ### Step 2: Create Python Script
 
@@ -125,7 +126,7 @@ Create a Python script to apply customizations:
 import sys
 
 def apply_customizations(template_content, customizations):
-    # Apply EnvironmentName customizations
+    # Apply EnvironmentName customizations (instance template)
     if 'EnvironmentName' in customizations:
         allowed_values = customizations['EnvironmentName']['AllowedValues']
         values_yaml = '\n'.join(f"      - '{v}'" for v in allowed_values)
@@ -133,60 +134,68 @@ def apply_customizations(template_content, customizations):
         replacement = f"    AllowedValues:\n{values_yaml}"
         template_content = template_content.replace(marker, replacement)
 
-    # Apply configSets customizations
-    if 'configSets' in customizations:
-        sets_yaml = '\n'.join(f"            - {s}" for s in customizations['configSets'])
-        marker = "            # CUSTOMIZATION_MARKER:configSets"
-        template_content = template_content.replace(marker, sets_yaml)
-
-    # Apply configSet definitions
-    if 'configSetDefinitions' in customizations:
-        definitions = customizations['configSetDefinitions']
-        indented = '\n'.join('        ' + line for line in definitions.split('\n'))
-        marker = "        # CUSTOMIZATION_MARKER:configSetDefinitions"
+    # Apply custom SSM steps (environment template)
+    if 'customSteps' in customizations:
+        steps = customizations['customSteps']
+        # Indent to match the mainSteps list level (10 spaces)
+        indented = '\n'.join('          ' + line for line in steps.split('\n'))
+        marker = "          # CUSTOMIZATION_MARKER:configSets - Add custom mainSteps here (after the 'post' step)"
         template_content = template_content.replace(marker, indented)
 
     return template_content
-
-# Load template and customizations, apply, write output
-# (See example implementation in Step 4 for complete script)
 ```
+
+---
 
 ### Step 3: Create Makefile
 
 Create a Makefile to automate the process:
 
 ```makefile
-OPENSOURCE_URL = https://raw.githubusercontent.com/easytocloud/cloudX/refs/heads/main/templates/cloudX-instance.yaml
+OPENSOURCE_INSTANCE_URL = https://raw.githubusercontent.com/easytocloud/cloudX/refs/heads/main/templates/cloudX-instance.yaml
+OPENSOURCE_ENV_URL      = https://raw.githubusercontent.com/easytocloud/cloudX/refs/heads/main/templates/cloudX-environment.yaml
 CUSTOMIZATIONS_FILE = my-customizations.yaml
-OUTPUT_FILE = cloudX-instance-custom.yaml
+OUTPUT_INSTANCE = cloudX-instance-custom.yaml
+OUTPUT_ENV      = cloudX-environment-custom.yaml
 
-all: $(OUTPUT_FILE)
+all: $(OUTPUT_INSTANCE) $(OUTPUT_ENV)
 
-$(OUTPUT_FILE): $(CUSTOMIZATIONS_FILE)
-	curl -fsSL $(OPENSOURCE_URL) -o template.tmp
-	python3 apply-customizations.py template.tmp $(CUSTOMIZATIONS_FILE) $(OUTPUT_FILE)
-	rm template.tmp
+$(OUTPUT_INSTANCE): $(CUSTOMIZATIONS_FILE)
+	curl -fsSL $(OPENSOURCE_INSTANCE_URL) -o instance.tmp
+	python3 apply-customizations.py instance.tmp $(CUSTOMIZATIONS_FILE) $(OUTPUT_INSTANCE) --target instance
+	rm instance.tmp
+
+$(OUTPUT_ENV): $(CUSTOMIZATIONS_FILE)
+	curl -fsSL $(OPENSOURCE_ENV_URL) -o env.tmp
+	python3 apply-customizations.py env.tmp $(CUSTOMIZATIONS_FILE) $(OUTPUT_ENV) --target environment
+	rm env.tmp
 
 clean:
-	rm -f $(OUTPUT_FILE)
+	rm -f $(OUTPUT_INSTANCE) $(OUTPUT_ENV)
 ```
 
-### Step 4: Generate Custom Template
+---
+
+### Step 4: Generate Custom Templates
 
 ```bash
 make all
 ```
 
-This fetches the latest opensource template and applies your customizations.
+This fetches the latest opensource templates and applies your customizations.
+
+---
 
 ## Benefits
 
-1. **Automatic Updates**: Inherit all improvements from the opensource template
-2. **Clear Separation**: Your customizations are isolated and documented
-3. **Version Control**: Track customizations separately from base template
-4. **Testability**: Easy to test with different versions
-5. **Repeatability**: Automated generation ensures consistency
+1. **Automatic Updates**: Inherit all improvements from the opensource templates — including new SSM document steps
+2. **Push updates to running instances**: Because setup runs via SSM State Manager, re-deploying the environment template pushes updates to running instances without recreating them
+3. **Clear Separation**: Your customizations are isolated and documented
+4. **Version Control**: Track customizations separately from base templates
+5. **Testability**: Easy to test with different versions
+6. **Repeatability**: Automated generation ensures consistency
+
+---
 
 ## Best Practices
 
@@ -209,7 +218,7 @@ EnvironmentName:
 
 ### Regular Updates
 
-Regularly sync with the upstream template to get security updates and improvements:
+Regularly sync with the upstream templates to get security updates and improvements:
 
 ```bash
 # Weekly or monthly
@@ -225,39 +234,31 @@ Always test generated templates in a development environment before production d
 Commit three things:
 1. Your customization file (`my-customizations.yaml`)
 2. The generation script (`apply-customizations.py`)
-3. The generated template (`cloudX-instance-custom.yaml`)
+3. The generated templates (`cloudX-instance-custom.yaml`, `cloudX-environment-custom.yaml`)
 
-This allows tracking what changed and why.
+---
 
-## Example Use Cases
+## Triggering Updates on Running Instances
 
-Organizations use this pattern to maintain customized cloudX templates with:
+Because setup is managed by SSM State Manager, you can push your customizations to already-running instances without recreating them:
 
-- **Environment name validation**: Restrict environments to approved names (dev, staging, prod)
-- **Package repository integration**: Configure AWS CodeArtifact or private PyPI servers
-- **Organization-specific shell configurations**: Add company-specific aliases and environment variables
-- **Compliance requirements**: Add security scanning, logging, or monitoring configurations
+```bash
+# Re-deploy the environment template (creates a new document version)
+aws cloudformation update-stack --stack-name cloudX-OTA-environment \
+  --template-body file://cloudX-environment-custom.yaml \
+  --capabilities CAPABILITY_IAM
 
-## Alternative: Feature Flags
-
-For simpler customizations, consider using CloudFormation conditions and parameters instead:
-
-```yaml
-Parameters:
-  EnableCustomFeature:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-
-Conditions:
-  UseCustomFeature: !Equals [!Ref EnableCustomFeature, 'true']
-
-# In configSet:
-        50_custom:
-          files:
-            /tmp/custom-setup.sh:
-              content: !If [UseCustomFeature, "echo 'Custom feature enabled'", "echo 'Custom feature disabled'"]
+# Trigger immediate re-convergence on all instances in the environment
+aws ssm start-associations-once \
+  --association-ids $(aws ssm list-associations \
+    --association-filter-list key=DocumentName,value=cloudX-OTA-setup \
+    --query 'Associations[].AssociationId' \
+    --output text)
 ```
+
+Or wait for the weekly scheduled run — all instances automatically converge within 7 days.
+
+---
 
 ## Support
 
