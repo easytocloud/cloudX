@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.6](https://github.com/easytocloud/cloudX/compare/v1.6.5...v1.6.6) (2026-05-18)
+
+
+### Bug Fixes
+
+* use SSM document to cloudX-ify instances ([a4f08e1](https://github.com/easytocloud/cloudX/commit/a4f08e10fba4c8d2e5d831038b0524fe50948b98))
+
 ## [1.6.5](https://github.com/easytocloud/cloudX/compare/v1.6.4...v1.6.5) (2026-05-13)
 
 
