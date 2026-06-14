@@ -230,5 +230,4 @@ Resources:
         EnvironmentName: [!Ref EnvironmentName]
       ApplyOnlyAtCronInterval: false
       SyncCompliance: AUTO
-      WaitForSuccessTimeoutSeconds: 3600
 

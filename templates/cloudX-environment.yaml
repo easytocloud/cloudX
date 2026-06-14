@@ -1091,12 +1091,14 @@ Resources:
         - Key: "tag:cloudX:update"
           Values:
             - "auto"
+        - Key: "tag:Environment"
+          Values:
+            - !Ref EnvironmentName
       Parameters:
         EnvironmentName: [!Ref EnvironmentName]
       ScheduleExpression: "cron(0 2 ? * SUN *)"
       ApplyOnlyAtCronInterval: true
       SyncCompliance: AUTO
-      WaitForSuccessTimeoutSeconds: 3600
 
   SetupDocumentNameParameter:
     Type: AWS::SSM::Parameter
