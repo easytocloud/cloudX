@@ -1089,7 +1089,7 @@ Resources:
       Parameters:
         EnvironmentName: [!Ref EnvironmentName]
       ScheduleExpression: "rate(7 days)"
-      ApplyOnlyAtCronInterval: true
+      ApplyOnlyAtCronInterval: false
       SyncCompliance: AUTO
       WaitForSuccessTimeoutSeconds: 3600
 
