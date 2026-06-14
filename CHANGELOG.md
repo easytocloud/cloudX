@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.5](https://github.com/easytocloud/cloudX/compare/v1.7.4...v1.7.5) (2026-06-14)
+
+
+### Bug Fixes
+
+* scope ssm:GetParameter to own environment namespace ([1f39fcb](https://github.com/easytocloud/cloudX/commit/1f39fcbd0b33e4143e13659bda3904169d8630b0))
+
 ## [1.7.4](https://github.com/easytocloud/cloudX/compare/v1.7.3...v1.7.4) (2026-06-14)
 
 
