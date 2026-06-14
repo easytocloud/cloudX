@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.6](https://github.com/easytocloud/cloudX/compare/v1.7.5...v1.7.6) (2026-06-14)
+
+
+### Bug Fixes
+
+* switch AutoUpdateAssociation to cron schedule to prevent launch race ([4a2af37](https://github.com/easytocloud/cloudX/commit/4a2af371b5fe96b57179ce4a780bb04b07c1439e))
+
 ## [1.7.5](https://github.com/easytocloud/cloudX/compare/v1.7.4...v1.7.5) (2026-06-14)
 
 
