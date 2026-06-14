@@ -4,18 +4,25 @@ cloudX provides AWS CloudFormation templates for setting up Amazon Linux 2023 EC
 
 ## Core Components
 
-1.  **CloudFormation Templates**: Located in `templates/`, these define the infrastructure.
-    *   `cloudX-environment.yaml`: Sets up the shared environment resources (VPC subnet, IAM groups, Parameter Store).
-    *   `cloudX-instance.yaml`: Deploys the actual development instance.
-    *   `cloudX-user.yaml`: Optional template for creating dedicated IAM users.
+**CloudFormation Templates** in `templates/`:
 
-2.  **Legacy Scripts**:
-    *   `install.sh`: Legacy installation script (kept for compatibility).
-    *   `ec2cloudx.sh`: Archived installation script.
-    *   `cloudX-proxy.sh` & `cloudx-proxy.ps1`: Archived proxy scripts.
+- `cloudX-environment.yaml` — shared environment resources: IAM, security group, Parameter Store, SSM setup document, auto-update association. Deploy once per environment.
+- `cloudX-instance.yaml` — EC2 instance + per-instance SSM State Manager association. Deploy per developer.
+- `cloudX-user.yaml` — optional dedicated IAM user with access keys. Prefer SSO roles instead.
 
-    *   Historically, this repository contained proxy scripts for connecting to the instances.
-    *   These have been moved to a dedicated repository: `cloudX-proxy`.
+## Configuration Delivery
+
+Instance setup is managed entirely by **SSM State Manager**, not UserData. The setup document lives inside `cloudX-environment.yaml` and is re-run automatically on a schedule. This means configuration changes can be pushed to running instances without recreating them — instances are treated as long-lived "pets".
+
+## Software on Instances
+
+Mandatory (always installed): Homebrew, direnv, uv, zsh + Oh My Zsh.
+Optional via CloudFormation parameters: NVM (with configurable version), Docker, privpage, for-tools.
+Intentionally absent: pip — `uv pip install` / `uv run` are the correct tools to avoid modifying OS Python.
+
+## Archive
+
+`install.sh` and everything under `archive/` are legacy reference material. The old proxy scripts (`cloudX-proxy.sh`, `cloudx-proxy.ps1`) have been superseded by the dedicated [cloudX-proxy](https://github.com/easytocloud/cloudX-proxy) repository. Do not update archived files.
 
 ## Naming Convention
 

@@ -1,27 +1,17 @@
 # cloudX
 
-## Background
+**cloudX** — 'cloud' always lowercase, capital X, even at the start of a sentence.
 
-**cloudX** (spelled as cloudX - 'cloud' always lowercase, even at start of sentence - followed by capital X)
+## What is cloudX
 
-### Previous Version
+CloudFormation templates that provision Amazon Linux 2023 EC2 instances as VSCode remote development backends — a Cloud9 successor. Instance configuration is managed via SSM State Manager (not UserData), enabling updates to running instances without recreation.
 
-The original cloudX included:
+## Repository layout
 
-- cloudX-proxy (bash and PowerShell scripts) distributed via GitHub and/or Homebrew
-- Backend AWS CloudFormation templates for environment, user, and instance
-- Instructions for setting up cloudX-proxy
+- `templates/` — the three CloudFormation templates that are the product
+- `archive/` — legacy scripts, kept for reference only, not maintained
+- `.ai/context/` — structured context files for AI tooling; read all files here for full project understanding
 
-### Modernized Version
+## Related repositories
 
-The current version includes everything from the previous version, plus:
-
-- **New Python-based proxy** (separate repository: [cloudX-proxy](https://github.com/easytocloud/cloudx-proxy))
-  - Automated setup
-  - Written in Python, published on PyPI
-  - Works on Mac and Windows
-  - Install or run with `uvx`
-
-- Backend AWS CloudFormation templates in original cloudX repository
-- Documentation at [easytocloud.github.io](https://easytocloud.github.io) (GitHub Pages)
-- Also works with SSO profile
+- **[cloudX-proxy](https://github.com/easytocloud/cloudX-proxy)** — client-side SSH proxy; Python, published on PyPI, installable with `uvx`. Handles SSH config, key management, and automatic instance wake-up on Mac and Windows.
