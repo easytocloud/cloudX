@@ -310,7 +310,6 @@ Resources:
   CloudXSetupDocument:
     Type: AWS::SSM::Document
     Properties:
-      Name: !Sub "cloudX-${EnvironmentName}-setup"
       DocumentType: Command
       DocumentFormat: YAML
       TargetType: /AWS/EC2/Instance
@@ -1086,7 +1085,7 @@ Resources:
     Type: AWS::SSM::Association
     DependsOn: CloudXSetupDocument
     Properties:
-      Name: !Sub "cloudX-${EnvironmentName}-setup"
+      Name: !Ref CloudXSetupDocument
       AssociationName: !Sub "cloudX-${EnvironmentName}-auto-update"
       Targets:
         - Key: "tag:cloudX:update"

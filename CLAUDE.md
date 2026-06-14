@@ -27,7 +27,7 @@ aws cloudformation validate-template --template-body file://templates/cloudX-use
 
 | Template | Deploy when | Creates |
 |---|---|---|
-| `cloudX-environment.yaml` | Once per environment (e.g. "OTA", "Prod") | IAM role/profile, security group, IAM group with ABAC policies, SSM Parameter Store entries at `/cloudX/{EnvironmentName}/...`, SSM Command Document `cloudX-{EnvironmentName}-setup`, and an `AutoUpdateAssociation` targeting instances tagged `cloudX:update=auto` on a 7-day schedule |
+| `cloudX-environment.yaml` | Once per environment (e.g. "OTA", "Prod") | IAM role/profile, security group, IAM group with ABAC policies, SSM Parameter Store entries at `/cloudX/{EnvironmentName}/...`, SSM Command Document (CFN-generated name stored in Parameter Store at `/cloudX/{EnvironmentName}/SetupDocumentName`), and an `AutoUpdateAssociation` targeting instances tagged `cloudX:update=auto` on a weekly cron |
 | `cloudX-instance.yaml` | Per developer per environment | EC2 instance (AL2023), a `SetupAssociation` that fires once on launch (targeting this instance by ID) and passes per-instance parameters to the setup document |
 | `cloudX-user.yaml` | Optional, per developer | IAM user `cloudX-{Env}-{User}`, access keys stored in Parameter Store — prefer SSO roles over this |
 
