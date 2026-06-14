@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.4](https://github.com/easytocloud/cloudX/compare/v1.7.3...v1.7.4) (2026-06-14)
+
+
+### Bug Fixes
+
+* grant ssm:GetParameter on /cloudX/* to EC2 instance role ([7d73de7](https://github.com/easytocloud/cloudX/commit/7d73de7eb0eb67d555a0fff0c88777eee58798b5))
+
 ## [1.7.3](https://github.com/easytocloud/cloudX/compare/v1.7.2...v1.7.3) (2026-06-14)
 
 
