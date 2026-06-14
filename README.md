@@ -72,7 +72,7 @@ Parameters:
 - `UserName`: Username without prefix (e.g., "john")
 - `EnvironmentName`: Name of the cloudX environment (must match an existing environment stack)
 - `InstanceType`: EC2 instance type (default: t3.2xlarge)
-- `VolumeSize`: Root volume size in GB (default: 16)
+- `VolumeSize`: Root volume size in GB (default: 80)
 - `UpdateMode`: `auto` (re-applies setup every 7 days) or `manual` (first launch only, default: `auto`)
 - Software packages: `NVM`, `NvmVersion`, `DOCKER`, `PRIVPAGE`, `FORTOOLS`
 

@@ -102,7 +102,7 @@ Parameters:
   VolumeSize:
     Type: Number
     Description: The size of the root volume in GB.
-    Default: 16
+    Default: 80
     MinValue: 10
     MaxValue: 300
 
