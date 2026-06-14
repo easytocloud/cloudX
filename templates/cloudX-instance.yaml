@@ -17,10 +17,14 @@ Metadata:
           default: Optional software packages to install
         Parameters:
           - NVM
-          - PIP
+          - NvmVersion
           - DOCKER
           - PRIVPAGE
           - FORTOOLS
+      - Label:
+          default: Update behaviour
+        Parameters:
+          - UpdateMode
     ParameterLabels:
       UserName:
         default: CloudX User name (without prefix)
@@ -36,8 +40,10 @@ Metadata:
         default: Minutes before idle shutdown
       NVM:
         default: Node Version Manager
-      PIP:
-        default: PIP package manager
+      NvmVersion:
+        default: NVM version to install (e.g. 0.40.3)
+      UpdateMode:
+        default: "Update mode: auto re-applies every 7 days; manual requires explicit trigger"
       DOCKER:
         default: Docker
       PRIVPAGE:
@@ -112,10 +118,18 @@ Parameters:
     Default: 'false'
     AllowedValues: ['true', 'false']
 
-  PIP:
+  NvmVersion:
     Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
+    Default: '0.40.3'
+    Description: 'NVM version to install, e.g. 0.40.3. Bumping this value on an existing stack upgrades NVM in-place on next SSM run.'
+
+  UpdateMode:
+    Type: String
+    Default: 'auto'
+    AllowedValues: ['auto', 'manual']
+    Description: >-
+      auto: State Manager re-applies the setup document every 7 days (keeps instance converged).
+      manual: Association only runs on initial launch or when explicitly triggered via start-associations-once.
 
   DOCKER:
     Type: String
@@ -193,6 +207,8 @@ Resources:
           Value: !Sub "cloudX-${EnvironmentName}-${UserName}"
         - Key: SSODomain
           Value: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SSODomain}}'
+        - Key: cloudX:update
+          Value: !Ref UpdateMode
 
   SetupAssociation:
     Type: AWS::SSM::Association
@@ -206,13 +222,13 @@ Resources:
             - !Ref EC2Instance
       Parameters:
         InstallNvm:      [!Ref NVM]
-        InstallPip:      [!Ref PIP]
+        NvmVersion:      [!Ref NvmVersion]
         InstallDocker:   [!Ref DOCKER]
         InstallPrivpage: [!Ref PRIVPAGE]
         InstallFortools: [!Ref FORTOOLS]
         ShutdownTimeout: [!Ref ShutdownTimeout]
         EnvironmentName: [!Ref EnvironmentName]
-      ScheduleExpression: "rate(7 days)"
+      ScheduleExpression: "rate(365 days)"
       ApplyOnlyAtCronInterval: false
       SyncCompliance: AUTO
       WaitForSuccessTimeoutSeconds: 3600

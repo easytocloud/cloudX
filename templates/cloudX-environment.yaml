@@ -80,6 +80,7 @@ Resources:
             - ec2:StopInstances
             - ec2:RebootInstances
             - ec2:TerminateInstances
+            - ec2:CreateTags
             Resource: "*"
 
   EC2InstanceProfile:
@@ -316,10 +317,6 @@ Resources:
             type: String
             default: "false"
             allowedValues: ["true", "false"]
-          InstallPip:
-            type: String
-            default: "false"
-            allowedValues: ["true", "false"]
           InstallDocker:
             type: String
             default: "false"
@@ -332,6 +329,9 @@ Resources:
             type: String
             default: "true"
             allowedValues: ["true", "false"]
+          NvmVersion:
+            type: String
+            default: "0.40.3"
           ShutdownTimeout:
             type: String
             default: "10"
@@ -819,8 +819,10 @@ Resources:
                   #!/bin/bash
                   set -euo pipefail
 
-                  INSTALL_PIP="{{ InstallPip }}"
+                  trap 'rm -f /home/ec2-user/.install-running' ERR
+
                   INSTALL_NVM="{{ InstallNvm }}"
+                  NVM_VERSION="{{ NvmVersion }}"
                   INSTALL_PRIVPAGE="{{ InstallPrivpage }}"
                   INSTALL_FORTOOLS="{{ InstallFortools }}"
                   SSO_DOMAIN=$(aws ssm get-parameter --name "/cloudX/{{ EnvironmentName }}/SSODomain" --query 'Parameter.Value' --output text)
@@ -863,7 +865,7 @@ Resources:
                   }
 
                   ensure_zsh_stack() {
-                      if ! command -v zsh &> /dev/null || [ ! -d ~/.oh-my-zsh ]; then
+                      if [ ! -d ~/.oh-my-zsh ]; then
                           echo "Installing zsh and oh-my-zsh..."
                           brew install zsh easytocloud/tap/sso-tools
                           cd /home/ec2-user || exit 1
@@ -889,31 +891,22 @@ Resources:
                       fi
                   }
 
-                  install_pip_stack() {
-                      if [[ "$INSTALL_PIP" != "true" ]]; then
-                          return
-                      fi
-
-                      if ! command -v pip &> /dev/null; then
-                          echo "Installing pip..."
-                          curl -O https://bootstrap.pypa.io/get-pip.py
-                          python3 get-pip.py --user
-                          rm get-pip.py
-                      else
-                          echo "pip already installed"
-                      fi
-                  }
-
                   install_nvm_stack() {
                       if [[ "$INSTALL_NVM" != "true" ]]; then
                           return
                       fi
 
                       if [ ! -d ~/.nvm ]; then
-                          echo "Installing nvm..."
-                          curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.38.0/install.sh | bash
+                          echo "Installing nvm ${NVM_VERSION}..."
+                          curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh" | bash
                       else
-                          echo "nvm already installed"
+                          installed_version=$(cat ~/.nvm/package.json 2>/dev/null | grep '"version"' | head -1 | tr -d ' ",' | cut -d: -f2 || echo "unknown")
+                          if [ "$installed_version" != "$NVM_VERSION" ]; then
+                              echo "Upgrading nvm from ${installed_version} to ${NVM_VERSION}..."
+                              curl -o- "https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh" | bash
+                          else
+                              echo "nvm ${NVM_VERSION} already installed"
+                          fi
                       fi
                   }
 
@@ -966,10 +959,6 @@ Resources:
                           add-to-rc privpage 'export AWS_PAGER=privpage'
                       fi
 
-                      if [[ "$INSTALL_PIP" == "true" ]]; then
-                          add-to-rc pip 'export PATH="$HOME/.local/bin:$PATH"'
-                      fi
-
                       if [[ "$INSTALL_NVM" == "true" ]]; then
                           add-to-rc nvm \
                               'export NVM_DIR="$HOME/.nvm"' \
@@ -1009,7 +998,6 @@ Resources:
                       ensure_uv
                       ensure_zsh_stack
                       install_fortools
-                      install_pip_stack
                       install_nvm_stack
                       install_privpage_stack
                       setup_rc_files
@@ -1051,6 +1039,15 @@ Resources:
                     echo "Docker installation disabled via parameter"
                   fi
                 - |
+                  INSTANCE_ID=$(TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60") && curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+                  REGION=$(TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60") && curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+                  DOCUMENT_NAME="cloudX-{{ EnvironmentName }}-setup"
+                  RUN_TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+                  VERSION_STRING="${DOCUMENT_NAME}@${RUN_TIMESTAMP}"
+                  mkdir -p /home/ec2-user/.cloudX
+                  printf '%s\n' "$VERSION_STRING" > /home/ec2-user/.cloudX/version
+                  chown ec2-user:ec2-user /home/ec2-user/.cloudX/version
+                  aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" --tags "Key=cloudX:version,Value=${VERSION_STRING}" || true
                   touch /home/ec2-user/.install-done
                   rm -f /home/ec2-user/.install-running
                   chown ec2-user:ec2-user /home/ec2-user/.install-done
@@ -1078,6 +1075,23 @@ Resources:
           #
           # The <name> is used as the block marker (# BEGIN:<name> / # END:<name>).
           # Re-running with the same name replaces the block — safe to call on re-provisioning.
+
+  AutoUpdateAssociation:
+    Type: AWS::SSM::Association
+    DependsOn: CloudXSetupDocument
+    Properties:
+      Name: !Sub "cloudX-${EnvironmentName}-setup"
+      AssociationName: !Sub "cloudX-${EnvironmentName}-auto-update"
+      Targets:
+        - Key: "tag:cloudX:update"
+          Values:
+            - "auto"
+      Parameters:
+        EnvironmentName: [!Ref EnvironmentName]
+      ScheduleExpression: "rate(7 days)"
+      ApplyOnlyAtCronInterval: true
+      SyncCompliance: AUTO
+      WaitForSuccessTimeoutSeconds: 3600
 
   SetupDocumentNameParameter:
     Type: AWS::SSM::Parameter
