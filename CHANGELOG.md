@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.3](https://github.com/easytocloud/cloudX/compare/v1.7.2...v1.7.3) (2026-06-14)
+
+
+### Bug Fixes
+
+* remove invalid rate(365 days) schedule from SetupAssociation ([9324c1d](https://github.com/easytocloud/cloudX/commit/9324c1d492f9d9dfbfd1b6c2dbd27894fc1f86cc))
+
+
+### Documentation
+
+* **claude.md:** correct association schedule descriptions ([3dc6a8f](https://github.com/easytocloud/cloudX/commit/3dc6a8ff117b7181840510de4ed800e64b4a6e5b))
+
 ## [1.7.2](https://github.com/easytocloud/cloudX/compare/v1.7.1...v1.7.2) (2026-06-14)
 
 
