@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.8](https://github.com/easytocloud/cloudX/compare/v1.7.7...v1.7.8) (2026-06-14)
+
+
+### Bug Fixes
+
+* scope AutoUpdateAssociation to own environment, drop WaitForSuccessTimeoutSeconds ([683f323](https://github.com/easytocloud/cloudX/commit/683f323609a9d787aca69c1a4ff4163d1eebf73a))
+
 ## [1.7.7](https://github.com/easytocloud/cloudX/compare/v1.7.6...v1.7.7) (2026-06-14)
 
 
