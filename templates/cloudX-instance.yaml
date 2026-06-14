@@ -228,7 +228,6 @@ Resources:
         InstallFortools: [!Ref FORTOOLS]
         ShutdownTimeout: [!Ref ShutdownTimeout]
         EnvironmentName: [!Ref EnvironmentName]
-      ScheduleExpression: "rate(365 days)"
       ApplyOnlyAtCronInterval: false
       SyncCompliance: AUTO
       WaitForSuccessTimeoutSeconds: 3600
