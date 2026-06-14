@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.2](https://github.com/easytocloud/cloudX/compare/v1.7.1...v1.7.2) (2026-06-14)
+
+
+### Bug Fixes
+
+* set ApplyOnlyAtCronInterval false on AutoUpdateAssociation ([743baf7](https://github.com/easytocloud/cloudX/commit/743baf7867f01921a2d50339261b33302d7b6b44))
+
 ## [1.7.1](https://github.com/easytocloud/cloudX/compare/v1.7.0...v1.7.1) (2026-06-14)
 
 
