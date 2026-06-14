@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.7](https://github.com/easytocloud/cloudX/compare/v1.7.6...v1.7.7) (2026-06-14)
+
+
+### Bug Fixes
+
+* remove explicit Name from CloudXSetupDocument to allow in-place updates ([e3e9455](https://github.com/easytocloud/cloudX/commit/e3e94552869f8f2659c04a854bdc90a7c87a8b8d))
+
 ## [1.7.6](https://github.com/easytocloud/cloudX/compare/v1.7.5...v1.7.6) (2026-06-14)
 
 
