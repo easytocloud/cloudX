@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.0](https://github.com/easytocloud/cloudX/compare/v1.6.6...v1.7.0) (2026-06-14)
+
+
+### Features
+
+* add NvmVersion parameter, tag-based update schedule, version tracking, and remove pip ([91edbc8](https://github.com/easytocloud/cloudX/commit/91edbc8787d12f85d81e7e0f9f494c60c0d25850))
+
+
+### Documentation
+
+* **ai-context:** refresh context files to reflect SSM State Manager pet model ([0d9feaf](https://github.com/easytocloud/cloudX/commit/0d9feaf8ba7cbc50b6957be4942aa7aab5edf982))
+
 ## [1.6.6](https://github.com/easytocloud/cloudX/compare/v1.6.5...v1.6.6) (2026-05-18)
 
 
