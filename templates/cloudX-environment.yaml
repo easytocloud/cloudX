@@ -849,6 +849,7 @@ Resources:
 
                       eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
                       brew tap easytocloud/tap >/dev/null 2>&1 || true
+                      brew trust easytocloud/tap >/dev/null 2>&1 || true
                   }
 
                   ensure_direnv() {
@@ -1093,8 +1094,8 @@ Resources:
             - "auto"
       Parameters:
         EnvironmentName: [!Ref EnvironmentName]
-      ScheduleExpression: "rate(7 days)"
-      ApplyOnlyAtCronInterval: false
+      ScheduleExpression: "cron(0 2 ? * SUN *)"
+      ApplyOnlyAtCronInterval: true
       SyncCompliance: AUTO
       WaitForSuccessTimeoutSeconds: 3600
 

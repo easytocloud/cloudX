@@ -38,7 +38,7 @@ The environment template stores all shared config in SSM Parameter Store; the in
 Instance configuration is delivered by SSM State Manager, not UserData. UserData only starts the SSM Agent. All setup logic lives in the `CloudXSetupDocument` SSM Command Document inside `cloudX-environment.yaml`.
 
 - **First run**: `SetupAssociation` (per-instance, in `cloudX-instance.yaml`) has no schedule — it fires once on association creation (`ApplyOnlyAtCronInterval: false`) and never again.
-- **Recurring updates**: `AutoUpdateAssociation` (in `cloudX-environment.yaml`) targets `tag:cloudX:update=auto` instances on a `rate(7 days)` schedule with `ApplyOnlyAtCronInterval: false` — fires immediately when the environment stack is deployed or updated, then recurs every 7 days.
+- **Recurring updates**: `AutoUpdateAssociation` (in `cloudX-environment.yaml`) targets `tag:cloudX:update=auto` instances on a `cron(0 2 ? * SUN *)` schedule (Sundays at 02:00 UTC) with `ApplyOnlyAtCronInterval: true` — strictly schedule-only, never fires on association creation or tag match. This prevents a race with `SetupAssociation` on first launch.
 - **Manual mode**: Set `UpdateMode=manual` on the instance stack; the instance gets tag `cloudX:update=manual` and is never picked up by the auto-update association.
 
 To push an update to running instances without recreating them:

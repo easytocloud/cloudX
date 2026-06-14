@@ -109,7 +109,7 @@ aws ssm start-associations-once \
     --query 'Associations[].AssociationId' --output text)
 ```
 
-Instances tagged `cloudX:update=auto` also converge automatically every 7 days without any manual trigger. After a successful run, each instance is tagged `cloudX:version=<document>@<timestamp>` and the value is written to `~/.cloudX/version` on the instance.
+Instances tagged `cloudX:update=auto` also converge automatically every Sunday at 02:00 UTC without any manual trigger. After a successful run, each instance is tagged `cloudX:version=<document>@<timestamp>` and the value is written to `~/.cloudX/version` on the instance.
 
 ## Client-Side Setup
 
