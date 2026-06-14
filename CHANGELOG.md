@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.7.1](https://github.com/easytocloud/cloudX/compare/v1.7.0...v1.7.1) (2026-06-14)
+
+
+### Bug Fixes
+
+* increase default volume size from 16 to 80 GB ([1377bf7](https://github.com/easytocloud/cloudX/commit/1377bf7a175bda351a97977a5af00c31eb7d4fe7))
+
+
+### Documentation
+
+* **readme:** update to reflect SSM State Manager pet model ([43a7fd9](https://github.com/easytocloud/cloudX/commit/43a7fd9c690a9c4e5b9e37a88c38705753a960ca))
+
 ## [1.7.0](https://github.com/easytocloud/cloudX/compare/v1.6.6...v1.7.0) (2026-06-14)
 
 
