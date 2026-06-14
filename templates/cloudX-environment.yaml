@@ -82,6 +82,11 @@ Resources:
             - ec2:TerminateInstances
             - ec2:CreateTags
             Resource: "*"
+          - Effect: Allow
+            Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+            Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloudX/*"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
