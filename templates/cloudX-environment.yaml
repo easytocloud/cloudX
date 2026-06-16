@@ -14,6 +14,7 @@ Metadata:
           - EnvironmentName
           - Subnet
           - SSODomain
+          - SSORegion
           - AbacTag
 
     ParameterLabels:
@@ -25,6 +26,8 @@ Metadata:
         default: "SubnetId for cloudX instances in existing VPC"
       SSODomain:
         default: "Domain for your AWS SSO Login page (e.g. mycompany.awsapps.com)"
+      SSORegion:
+        default: "AWS region where your IAM Identity Center instance is hosted (e.g. eu-west-1)"
 
 Parameters:
 
@@ -42,6 +45,10 @@ Parameters:
   SSODomain:
     Type: String
     Default: "<my>.awsapps.com"
+
+  SSORegion:
+    Type: String
+    Default: "eu-west-1"
 
 Resources:
 
@@ -72,16 +79,23 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
-            - sts:GetServiceBearerToken
-            Resource: "*"
-          - Effect: Allow
-            Action:
-            - ec2:StartInstances
             - ec2:StopInstances
             - ec2:RebootInstances
             - ec2:TerminateInstances
             - ec2:CreateTags
             Resource: "*"
+          - Effect: Deny
+            Action:
+            - ec2:StopInstances
+            - ec2:RebootInstances
+            - ec2:TerminateInstances
+            - ec2:CreateTags
+            Resource: "*"
+            Condition:
+              ArnNotLike:
+                ec2:SourceInstanceARN: !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*"
+              Null:
+                ec2:SourceInstanceARN: "false"
           - Effect: Allow
             Action:
             - ssm:GetParameter
@@ -137,6 +151,13 @@ Resources:
       Type: String
       Value: !Ref SSODomain
 
+  SSORegionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /cloudX/${EnvironmentName}/SSORegion
+      Type: String
+      Value: !Ref SSORegion
+
   GroupNameParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -165,7 +186,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: index.handler
-      Runtime: python3.11   
+      Runtime: python3.12
       Timeout: 30
       Role: !GetAtt GetVPCRole.Arn
       Code:
@@ -829,7 +850,10 @@ Resources:
                   NVM_VERSION="{{ NvmVersion }}"
                   INSTALL_PRIVPAGE="{{ InstallPrivpage }}"
                   INSTALL_FORTOOLS="{{ InstallFortools }}"
+                  _TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+                  REGION=$(curl -sf -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
                   SSO_DOMAIN=$(aws ssm get-parameter --name "/cloudX/{{ EnvironmentName }}/SSODomain" --query 'Parameter.Value' --output text)
+                  SSO_REGION=$(aws ssm get-parameter --name "/cloudX/{{ EnvironmentName }}/SSORegion" --query 'Parameter.Value' --output text)
                   CLOUDX_HOME="/home/ec2-user/.cloudX"
                   EC2_USER_HOME="/home/ec2-user"
 
@@ -975,18 +999,18 @@ Resources:
                           cat > "$EC2_USER_HOME/.aws/config" << AWSCONF
                   [sso-session sso]
                   sso_start_url = https://${SSO_DOMAIN}/start#/
-                  sso_region = eu-west-1
+                  sso_region = ${SSO_REGION}
                   sso_registration_scopes = sso:account:access
                   sso_token_provider = aws-toolkit
 
                   [profile default]
                   sso_session = sso
-                  region = eu-west-1
+                  region = ${REGION}
                   output = json
 
                   [profile sso-browser]
                   sso_session = sso
-                  region = eu-west-1
+                  region = ${REGION}
                   output = json
                   sso_account_id = "REPLACE WITH YOU MAIN ACCOUNT ID"
                   sso_role_name = "REPLACE WITH YOUR SSO READONLY ROLE NAME"
@@ -1044,6 +1068,14 @@ Resources:
                     echo "Docker installation disabled via parameter"
                   fi
                 - |
+                  cat > /usr/local/bin/ec2-hostname << 'EOEHOSTNAME'
+                  #!/bin/bash
+                  TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+                  curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/tags/instance/Name
+                  echo
+                  EOEHOSTNAME
+                  chmod 755 /usr/local/bin/ec2-hostname
+                - |
                   INSTANCE_ID=$(TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60") && curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
                   REGION=$(TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60") && curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
                   DOCUMENT_NAME="cloudX-{{ EnvironmentName }}-setup"
@@ -1083,7 +1115,6 @@ Resources:
 
   AutoUpdateAssociation:
     Type: AWS::SSM::Association
-    DependsOn: CloudXSetupDocument
     Properties:
       Name: !Ref CloudXSetupDocument
       AssociationName: !Sub "cloudX-${EnvironmentName}-auto-update"

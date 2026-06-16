@@ -101,3 +101,13 @@ Semantic Release runs on every push to `main` and drives versioning + S3 publish
 ## archive/
 
 `install.sh` and everything under `archive/` are legacy — kept for reference only. Do not update them or reference them in new work.
+
+## Known limitations
+
+### Single region per environment name
+
+The environment template creates global IAM resources (IAM Group, IAM Users via `cloudX-user.yaml`) named after `EnvironmentName` (e.g. `cloudX-OTA-Group`, `cloudX-OTA-erik`). IAM is a global AWS service — deploying the same `EnvironmentName` in two regions within the same account would cause a name clash and the second stack deployment would fail.
+
+This is by design: cloudX is intended for single-region deployments per environment name. If multi-region is needed, use distinct environment names per region (e.g. `OTA-use1`, `OTA-euw1`).
+
+Note: `cloudX-user.yaml` is deprecated in favour of SSO. Once all users have migrated to SSO roles, the IAM User naming constraint no longer applies.

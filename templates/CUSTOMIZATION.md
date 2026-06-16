@@ -90,6 +90,23 @@ Installation and configuration logic runs as SSM State Manager document steps in
 
 ---
 
+### IMDSv2 requirement
+
+The base template sets `HttpTokens: required` on the instance, which disables IMDSv1. Any custom SSM step that queries instance metadata **must** use the IMDSv2 token pattern:
+
+```bash
+TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+VALUE=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" \
+  "http://169.254.169.254/latest/meta-data/<path>")
+```
+
+Plain `curl http://169.254.169.254/...` calls without a token will fail with a `401` once `HttpTokens: required` is in effect.
+
+Instance tags are also accessible from metadata (`InstanceMetadataTags: enabled`), so custom steps can read tags via IMDS rather than calling `aws ec2 describe-tags`.
+
+---
+
 ## Implementation Pattern
 
 ### Step 1: Create Customization File

@@ -194,6 +194,10 @@ Resources:
           systemctl start amazon-ssm-agent
           touch /home/ec2-user/.install-running
           chown ec2-user:ec2-user /home/ec2-user/.install-running
+      MetadataOptions:
+        InstanceMetadataTags: enabled
+        HttpTokens: required          # forces IMDSv2; custom SSM steps must use PUT token pattern
+        HttpEndpoint: enabled
       SecurityGroupIds:
         - !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SecurityGroup}}'
       IamInstanceProfile: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/InstanceProfileName}}'
@@ -212,7 +216,6 @@ Resources:
 
   SetupAssociation:
     Type: AWS::SSM::Association
-    DependsOn: EC2Instance
     Properties:
       Name: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SetupDocumentName}}'
       AssociationName: !Sub "cloudX-${EnvironmentName}-${SSHHostName}-setup"
