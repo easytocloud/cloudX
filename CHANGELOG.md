@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.1](https://github.com/easytocloud/cloudX/compare/v1.8.0...v1.8.1) (2026-06-16)
+
+
+### Bug Fixes
+
+* **environment:** quote Null condition key to prevent YAML reserved word parse error ([fb107d5](https://github.com/easytocloud/cloudX/commit/fb107d5e2d602708cca6f9404042cd510be81fe1))
+
 ## [1.8.0](https://github.com/easytocloud/cloudX/compare/v1.7.8...v1.8.0) (2026-06-16)
 
 
