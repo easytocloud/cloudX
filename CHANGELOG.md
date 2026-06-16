@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0](https://github.com/easytocloud/cloudX/compare/v1.8.1...v2.0.0) (2026-06-16)
+
+
+### ⚠ BREAKING CHANGES
+
+* **tags:** existing instance stacks must be updated to apply the
+renamed tags. During the transition, instances with the old Environment
+tag will not be picked up by AutoUpdateAssociation until their instance
+stack is redeployed.
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+
+### Bug Fixes
+
+* **tags:** standardise EC2 instance tags to cloudX: namespace ([ee30188](https://github.com/easytocloud/cloudX/commit/ee301882252128f8b29f113b59d7a097bdfaa479))
+
 ## [1.8.1](https://github.com/easytocloud/cloudX/compare/v1.8.0...v1.8.1) (2026-06-16)
 
 
