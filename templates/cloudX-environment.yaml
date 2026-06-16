@@ -94,7 +94,7 @@ Resources:
             Condition:
               ArnNotLike:
                 ec2:SourceInstanceARN: !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*"
-              Null:
+              "Null":
                 ec2:SourceInstanceARN: "false"
           - Effect: Allow
             Action:
