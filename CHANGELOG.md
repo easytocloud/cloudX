@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.8.0](https://github.com/easytocloud/cloudX/compare/v1.7.8...v1.8.0) (2026-06-16)
+
+
+### Features
+
+* **environment:** add SSORegion parameter and ec2-hostname command ([9e480ce](https://github.com/easytocloud/cloudX/commit/9e480ce5829954e925c5fe5a442e913f075c7d96))
+
 ## [1.7.8](https://github.com/easytocloud/cloudX/compare/v1.7.7...v1.7.8) (2026-06-14)
 
 
