@@ -205,11 +205,11 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub "cloudX-${EnvironmentName}-${SSHHostName} | ${UserName}"
-        - Key: Environment
+        - Key: cloudX:environment
           Value: !Sub "${EnvironmentName}"
         - Key: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/AbacTag}}'
           Value: !Sub "cloudX-${EnvironmentName}-${UserName}"
-        - Key: SSODomain
+        - Key: cloudX:sso_domain
           Value: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SSODomain}}'
         - Key: cloudX:update
           Value: !Ref UpdateMode

@@ -36,7 +36,7 @@ Parameters:
 
   AbacTag:
     Type: String
-    Default: "ez2:cloudx:user"
+    Default: "cloudX:user"
 
   EnvironmentName:
     Type: String
@@ -1122,7 +1122,7 @@ Resources:
         - Key: "tag:cloudX:update"
           Values:
             - "auto"
-        - Key: "tag:Environment"
+        - Key: "tag:cloudX:environment"
           Values:
             - !Ref EnvironmentName
       Parameters:
