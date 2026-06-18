@@ -789,10 +789,10 @@ Resources:
                           return 1
                       fi
 
-                      # Create .venv if it doesn't exist
+                      # Create .venv if it doesn't exist, passing any args (e.g. --python python3.11)
                       if [[ ! -d .venv ]]; then
-                          log_status "Creating virtual environment with uv"
-                          uv venv --seed
+                          log_status "Creating virtual environment with uv $*"
+                          uv venv --seed "$@"
                       fi
 
                       # Sync dependencies if project files exist
