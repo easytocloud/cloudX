@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1](https://github.com/easytocloud/cloudX/compare/v2.0.0...v2.0.1) (2026-06-18)
+
+
+### Bug Fixes
+
+* **environment:** pass layout_uv arguments to uv venv for Python version support ([54de9f5](https://github.com/easytocloud/cloudX/commit/54de9f55e61c5d652e0c2440f1d857fceb08fd2f))
+
 ## [2.0.0](https://github.com/easytocloud/cloudX/compare/v1.8.1...v2.0.0) (2026-06-16)
 
 
