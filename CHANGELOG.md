@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.2](https://github.com/easytocloud/cloudX/compare/v2.0.1...v2.0.2) (2026-07-22)
+
+
+### Bug Fixes
+
+* **environment:** prevent stale zsh FPATH after oh-my-zsh update ([59e6e59](https://github.com/easytocloud/cloudX/commit/59e6e59afd72e80cee31e44a043a82057a72fc74))
+
 ## [2.0.1](https://github.com/easytocloud/cloudX/compare/v2.0.0...v2.0.1) (2026-06-18)
 
 
