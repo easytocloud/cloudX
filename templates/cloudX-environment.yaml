@@ -968,6 +968,17 @@ Resources:
                               '[ -f "${HOME}/.cloudx.zsh" ] && . "${HOME}/.cloudx.zsh"'
                       fi
 
+                      # oh-my-zsh hygiene, written to ~/.zshenv so it applies BEFORE
+                      # `source $ZSH/oh-my-zsh.sh` runs in ~/.zshrc (zsh reads .zshenv first):
+                      #   1. Disable oh-my-zsh's self-updater. Updates are delivered via SSM
+                      #      State Manager; an uncontrolled `omz update` moves completion files
+                      #      under $ZSH (all in fpath) and leaves a stale FPATH / ~/.zcompdump.
+                      #   2. Seed Homebrew's site-functions into fpath so the single compinit
+                      #      that oh-my-zsh runs already sees brew completions.
+                      add-to-rc --file "$EC2_USER_HOME/.zshenv" cloudx-omz \
+                          "zstyle ':omz:update' mode disabled" \
+                          '[ -d /home/linuxbrew/.linuxbrew/share/zsh/site-functions ] && fpath=(/home/linuxbrew/.linuxbrew/share/zsh/site-functions $fpath)'
+
                       # Common: Homebrew shell env (both bash and zsh)
                       add-to-rc brew \
                           'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"'
@@ -979,9 +990,12 @@ Resources:
                       # Shell-specific: AWS CLI completion
                       add-to-rc --bash aws-complete \
                           'complete -C aws_completer aws'
+                      # aws_completer is an external completer (complete -C), so it only needs
+                      # bashcompinit. compinit is run once by oh-my-zsh with a fully-populated
+                      # fpath (see the cloudx-omz block in ~/.zshenv) — a second compinit here
+                      # wrote a separate ~/.zcompdump and could go stale, so it is removed.
                       add-to-rc --zsh aws-complete \
-                          'autoload bashcompinit && bashcompinit' \
-                          'autoload -Uz compinit && compinit' \
+                          'autoload -Uz bashcompinit && bashcompinit' \
                           'complete -C aws_completer aws'
 
                       if [[ "$INSTALL_PRIVPAGE" == "true" ]]; then
@@ -1056,6 +1070,11 @@ Resources:
                   else
                     echo "Skipping zsh default shell configuration"
                   fi
+                - |
+                  # Invalidate cached zsh completion dumps on every convergence. A stale
+                  # ~/.zcompdump keeps a stale FPATH after tools change (e.g. an oh-my-zsh
+                  # update); removing it forces compinit to rebuild on the next shell.
+                  rm -f /home/ec2-user/.zcompdump* 2>/dev/null || true
                 - |
                   if [ "{{ InstallDocker }}" = "true" ]; then
                     if ! command -v docker &> /dev/null; then
