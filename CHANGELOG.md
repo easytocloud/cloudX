@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.0](https://github.com/easytocloud/cloudX/compare/v2.0.2...v2.1.0) (2026-09-08)
+
+
+### Features
+
+* add cloudX CLI with self-service update and version subcommands ([c14205a](https://github.com/easytocloud/cloudX/commit/c14205af0a669f57dac8b9647d4270e93a9f393b))
+
+
+### Bug Fixes
+
+* address review feedback - IMDS timeouts and parameter drift ([bf91bd0](https://github.com/easytocloud/cloudX/commit/bf91bd0ff73fa56559014b551ca050e3a64b07fd))
+
 ## [2.0.2](https://github.com/easytocloud/cloudX/compare/v2.0.1...v2.0.2) (2026-07-22)
 
 
