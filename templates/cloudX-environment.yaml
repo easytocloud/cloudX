@@ -101,6 +101,21 @@ Resources:
             - ssm:GetParameter
             - ssm:GetParameters
             Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/cloudX/${EnvironmentName}/*"
+          - Effect: Allow
+            # Lets an instance re-run its own setup document on demand (see the `cloudX
+            # update` command below) instead of waiting for the weekly auto-update
+            # schedule. Not scoped to the calling instance's own instance ID: IAM has no
+            # reliable way to express "only the caller's own resource" for a role shared
+            # across a whole instance fleet (ec2:SourceInstanceARN can only be compared
+            # against a fixed, known ARN, not the resource being acted on). The blast
+            # radius of leaving this unscoped is small: SendCommand is still restricted to
+            # this one fixed, idempotent document, so at worst one instance can nudge
+            # another into redundantly re-running its own safe setup steps.
+            Action:
+            - ssm:SendCommand
+            Resource:
+            - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:document/${CloudXSetupDocument}"
+            - !Sub "arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/*"
 
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -1107,6 +1122,59 @@ Resources:
                   touch /home/ec2-user/.install-done
                   rm -f /home/ec2-user/.install-running
                   chown ec2-user:ec2-user /home/ec2-user/.install-done
+
+          - name: install_cloudx_cli
+            action: aws:runShellScript
+            inputs:
+              runCommand:
+                - |
+                  cat > /usr/local/bin/cloudX << 'EOCLOUDX'
+                  #!/bin/bash
+                  set -euo pipefail
+
+                  usage() {
+                    cat <<EOF
+                  Usage: cloudX <command>
+
+                  Commands:
+                    update      Force this instance to reconverge to the current setup document now
+                    --version   Print the cloudX version currently applied to this instance
+                  EOF
+                  }
+
+                  cmd_update() {
+                    TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+                    INSTANCE_ID=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+                    REGION=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+
+                    ENVIRONMENT_NAME=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:environment" \
+                      --query 'Tags[0].Value' --output text)
+                    if [ -z "$ENVIRONMENT_NAME" ] || [ "$ENVIRONMENT_NAME" = "None" ]; then
+                      echo "ERROR: could not determine cloudX:environment tag for ${INSTANCE_ID}" >&2
+                      exit 1
+                    fi
+
+                    DOCUMENT_NAME=$(aws ssm get-parameter --region "$REGION" \
+                      --name "/cloudX/${ENVIRONMENT_NAME}/SetupDocumentName" \
+                      --query 'Parameter.Value' --output text)
+
+                    COMMAND_ID=$(aws ssm send-command --region "$REGION" \
+                      --document-name "$DOCUMENT_NAME" \
+                      --instance-ids "$INSTANCE_ID" \
+                      --parameters "EnvironmentName=${ENVIRONMENT_NAME}" \
+                      --query 'Command.CommandId' --output text)
+
+                    echo "Triggered reconvergence (command ${COMMAND_ID}) - runs in the background."
+                  }
+
+                  case "${1:-}" in
+                    update) cmd_update ;;
+                    --version|version) cat /home/ec2-user/.cloudX/version ;;
+                    *) usage; exit 1 ;;
+                  esac
+                  EOCLOUDX
+                  chmod 755 /usr/local/bin/cloudX
 
           # CUSTOMIZATION_MARKER:configSets - Add custom mainSteps here (after the 'post' step)
           # CUSTOMIZATION_MARKER:configSetDefinitions - Each SSM mainStep contains both name and runCommand inline.
