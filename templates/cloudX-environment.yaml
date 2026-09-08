@@ -403,11 +403,35 @@ Resources:
             inputs:
               runCommand:
                 - |
-                  cat > /home/ec2-user/.cloudX/autoshutdown-configuration << 'EOCONF'
-                  SHUTDOWN_TIMEOUT={{ ShutdownTimeout }}
+                  # A weekly/on-demand reconvergence only ever supplies EnvironmentName as
+                  # a document parameter (see AutoUpdateAssociation/cloudX update), so
+                  # {{ ShutdownTimeout }} resolves to the document's bare default on every
+                  # run after the first. Prefer the durable cloudX:shutdown_timeout tag
+                  # (stamped below) over the parameter, so a value chosen at launch time
+                  # survives every later reconvergence instead of being silently reset.
+                  PARAM_SHUTDOWN_TIMEOUT="{{ ShutdownTimeout }}"
+                  _TOKEN=$(curl -sf --connect-timeout 2 --max-time 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+                  INSTANCE_ID=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+                  REGION=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+
+                  TAG_SHUTDOWN_TIMEOUT=$(aws ec2 describe-tags --region "$REGION" \
+                    --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:shutdown_timeout" \
+                    --query 'Tags[0].Value' --output text 2>/dev/null || true)
+
+                  if [ -n "$TAG_SHUTDOWN_TIMEOUT" ] && [ "$TAG_SHUTDOWN_TIMEOUT" != "None" ]; then
+                    SHUTDOWN_TIMEOUT="$TAG_SHUTDOWN_TIMEOUT"
+                  else
+                    SHUTDOWN_TIMEOUT="$PARAM_SHUTDOWN_TIMEOUT"
+                  fi
+
+                  cat > /home/ec2-user/.cloudX/autoshutdown-configuration << EOCONF
+                  SHUTDOWN_TIMEOUT=${SHUTDOWN_TIMEOUT}
                   EOCONF
                   chmod 644 /home/ec2-user/.cloudX/autoshutdown-configuration
                   chown ec2-user:ec2-user /home/ec2-user/.cloudX/autoshutdown-configuration
+
+                  aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" \
+                    --tags "Key=cloudX:shutdown_timeout,Value=${SHUTDOWN_TIMEOUT}" || true
                 - |
                   cat > /home/ec2-user/.cloudX/stop-if-inactive.sh << 'EOSCRIPT'
                   #!/bin/bash
@@ -865,8 +889,20 @@ Resources:
                   NVM_VERSION="{{ NvmVersion }}"
                   INSTALL_PRIVPAGE="{{ InstallPrivpage }}"
                   INSTALL_FORTOOLS="{{ InstallFortools }}"
-                  _TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
-                  REGION=$(curl -sf -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+                  _TOKEN=$(curl -sf --connect-timeout 2 --max-time 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+                  INSTANCE_ID=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+                  REGION=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+                  # Same reasoning as the autoshutdown step: only the true first-boot
+                  # association call ever supplies the real NvmVersion; every later
+                  # reconvergence sees the document's bare default. Prefer the durable
+                  # cloudX:nvm_version tag (stamped by install_nvm_stack below) so a
+                  # deliberately-chosen nvm version doesn't silently regress.
+                  TAG_NVM_VERSION=$(aws ec2 describe-tags --region "$REGION" \
+                    --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:nvm_version" \
+                    --query 'Tags[0].Value' --output text 2>/dev/null || true)
+                  if [ -n "$TAG_NVM_VERSION" ] && [ "$TAG_NVM_VERSION" != "None" ]; then
+                    NVM_VERSION="$TAG_NVM_VERSION"
+                  fi
                   SSO_DOMAIN=$(aws ssm get-parameter --name "/cloudX/{{ EnvironmentName }}/SSODomain" --query 'Parameter.Value' --output text)
                   SSO_REGION=$(aws ssm get-parameter --name "/cloudX/{{ EnvironmentName }}/SSORegion" --query 'Parameter.Value' --output text)
                   CLOUDX_HOME="/home/ec2-user/.cloudX"
@@ -952,6 +988,9 @@ Resources:
                               echo "nvm ${NVM_VERSION} already installed"
                           fi
                       fi
+
+                      aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" \
+                          --tags "Key=cloudX:nvm_version,Value=${NVM_VERSION}" || true
                   }
 
                   install_privpage_stack() {
@@ -1143,9 +1182,9 @@ Resources:
                   }
 
                   cmd_update() {
-                    TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
-                    INSTANCE_ID=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
-                    REGION=$(curl -sf -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+                    TOKEN=$(curl -sf --connect-timeout 2 --max-time 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+                    INSTANCE_ID=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+                    REGION=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
 
                     ENVIRONMENT_NAME=$(aws ec2 describe-tags --region "$REGION" \
                       --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:environment" \
