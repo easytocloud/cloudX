@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.2](https://github.com/easytocloud/cloudX/compare/v2.1.1...v2.1.2) (2026-09-15)
+
+
+### Bug Fixes
+
+* restore YAML indentation in established_conns() lost in review edit ([9b99e82](https://github.com/easytocloud/cloudX/commit/9b99e820c15b65e101718805863126af7e10f4e2))
+
 ## [2.1.1](https://github.com/easytocloud/cloudX/compare/v2.1.0...v2.1.1) (2026-09-15)
 
 
