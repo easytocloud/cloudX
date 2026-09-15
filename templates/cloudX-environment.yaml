@@ -433,52 +433,107 @@ Resources:
                   aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" \
                     --tags "Key=cloudX:shutdown_timeout,Value=${SHUTDOWN_TIMEOUT}" || true
                 - |
-                  cat > /home/ec2-user/.cloudX/stop-if-inactive.sh << 'EOSCRIPT'
+                  # Idempotent migration from older cloudX versions, which kept the idle-check
+                  # script, its ad-hoc log file, and a heartbeat file directly under ~/.cloudX.
+                  # The script now lives at /usr/local/bin (see below) - systemd (PID 1, SELinux
+                  # domain init_t) is denied execute on any file labeled user_home_t under
+                  # SELinux-enforcing distros, which silently broke autoshutdown entirely on
+                  # every such distro - and its logs go to the system journal instead of a
+                  # hand-rolled log file. Only autoshutdown-configuration, version, and this
+                  # README are meant to remain here.
+                  rm -f /home/ec2-user/.cloudX/stop-if-inactive.sh
+                  rm -f /home/ec2-user/.cloudX/autoshutdown-log
+                  rm -f /home/ec2-user/.cloudX/autoshutdown-timestamp
+
+                  cat > /home/ec2-user/.cloudX/README << 'EOREADME'
+                  This directory holds cloudX's per-instance runtime state:
+
+                    autoshutdown-configuration   SHUTDOWN_TIMEOUT=<minutes>, the idle timeout
+                                                  before this instance shuts itself down
+                                                  automatically.
+                    version                      The cloudX product version currently applied
+                                                  to this instance.
+
+                  The autoshutdown script itself lives at
+                  /usr/local/bin/cloudX-stop-if-inactive.sh (moved out of here so systemd can
+                  execute it under SELinux-enforcing distros, which deny PID 1 from executing
+                  files labeled user_home_t). Its logs go to the system journal:
+                  `journalctl -u cloudX-automatic-shutdown.service`.
+                  EOREADME
+                  chmod 644 /home/ec2-user/.cloudX/README
+                  chown ec2-user:ec2-user /home/ec2-user/.cloudX/README
+                - |
+                  cat > /usr/local/bin/cloudX-stop-if-inactive.sh << 'EOSCRIPT'
                   #!/bin/bash
                   #
-                  # Based on AWS default cloud9 script, this is an improved version for use with C9 and VSCODE
+                  # Run every minute by cloudX-automatic-shutdown.timer. Schedules a shutdown in
+                  # SHUTDOWN_TIMEOUT minutes once the instance is judged idle; cancels it if
+                  # activity resumes before it fires.
                   #
-                  # How it works:
+                  # Idle detection combines two signals, replacing the old "any established
+                  # connection = active" check (which never went idle: a merely-open-but-silent
+                  # SSH/VSCode-Remote/SSM tunnel counted as activity forever, even overnight
+                  # with zero real interactive use):
+                  #   - network traffic volume (RX+TX bytes/minute across all non-loopback
+                  #     interfaces) above a small noise floor - catches real interactive use
+                  #     while ignoring background keepalive chatter.
+                  #   - any brand-new ec2-user network connection since the last check - a
+                  #     short grace window so a session that's mid-handshake (and hasn't sent
+                  #     much traffic yet) isn't mistaken for idle.
                   #
-                  # systemd - by means of /etc/system.d/system/cloudX-automatic-shutdown - runs this script every minute
-                  # the script schedules a shutdown in 'SHUTDOWN_TIMEOUT' minutes when instance is idle
-                  # if whithin the shutdown timeout period activity is detected (e.g. reconnect), the shutdown is canceled
+                  # shutdown creates /run/systemd/shutdown/scheduled; that file's existence
+                  # (checked by is_shutting_down) is the reliable indicator that a shutdown is
+                  # pending. `shutdown -c` alone doesn't remove it, so cancel_shutdown does.
 
-                  # idle detection is
-                  # - no vfs connected
-                  # - no vscode-server running
+                  set -euo pipefail
 
-                  # shutdown creates a file /run/systemd/shutdown/scheduled.
-                  # shutdown -c doesn't remove the file, the cancel_shutdown function does.
-                  # the existence of the file is checked by is_shutting_down as a reliable indicator
-                  # of a shutdown being scheduled. if not - just to be sure - pgrep is used to check
-                  # if a shutdown process is running
+                  CONFIG_FILE=/home/ec2-user/.cloudX/autoshutdown-configuration
+                  STATE_DIR=/var/lib/cloudX
+                  PREV_BYTES_FILE="$STATE_DIR/prev-bytes"
+                  PREV_CONNS_FILE="$STATE_DIR/prev-conns"
+                  NOISE_THRESHOLD_BYTES=51200   # ~50 KiB/min, above typical background/keepalive chatter
 
-                  # active ssh/ssm sessions are not taken into account for idle detection !!
+                  mkdir -p "$STATE_DIR"
 
-                  # -- functions --
-
-                  exec 3> /home/ec2-user/.cloudX/autoshutdown-log
-
-                  is_ec2user_connected()
-                  {
-                      printf "\n$(date): output is_ec2user_connected():\n" >&3
-
-                      # check if server has established connection
-
-                      established=$(/usr/bin/lsof -i -a -u ec2-user | grep 'ESTABLISHED' )
-                      if [[ -z "$established" ]]; then
-                          echo "no established connection found" >&3
-                          return 1
-                      fi
-                      printf "established connections:\n $established" >&3
-
-                      return 0
+                  log() {
+                      echo "$(date -Is): $*"
                   }
 
-                  is_active()
-                  {
-                      is_ec2user_connected
+                  net_bytes() {
+                      awk '$1 != "lo:" && NR > 2 { gsub(":", "", $1); rx += $2; tx += $10 } END { print rx + tx + 0 }' /proc/net/dev
+                  }
+
+                  established_conns() {
+                      /usr/bin/lsof -i -a -u ec2-user 2>/dev/null | awk '/ESTABLISHED/' || true
+                  }
+
+                  is_active() {
+                      local prev_bytes=0 cur_bytes delta cur_conns new_conns
+                      [ -f "$PREV_BYTES_FILE" ] && prev_bytes=$(cat "$PREV_BYTES_FILE")
+
+                      cur_bytes=$(net_bytes)
+                      delta=$(( cur_bytes - prev_bytes ))
+                      [ "$delta" -lt 0 ] && delta=0   # counter reset, e.g. interface bounce
+                      echo "$cur_bytes" > "$PREV_BYTES_FILE"
+
+                      cur_conns=$(established_conns)
+                      if [ -f "$PREV_CONNS_FILE" ]; then
+                          new_conns=$(comm -13 <(sort "$PREV_CONNS_FILE") <(printf '%s\n' "$cur_conns" | sort))
+                      else
+                          new_conns="$cur_conns"
+                      fi
+                      printf '%s\n' "$cur_conns" > "$PREV_CONNS_FILE"
+
+                      if [ "$delta" -ge "$NOISE_THRESHOLD_BYTES" ]; then
+                          log "active: ${delta} bytes/min network traffic (threshold ${NOISE_THRESHOLD_BYTES})"
+                          return 0
+                      fi
+                      if [ -n "$new_conns" ]; then
+                          log "active: new ec2-user connection since last check"
+                          return 0
+                      fi
+                      log "idle: ${delta} bytes/min, no new connections"
+                      return 1
                   }
 
                   is_shutting_down() {
@@ -491,46 +546,44 @@ Resources:
                       fi
                   }
 
-                  cancel_shutdown()
-                  {
-                      sudo shutdown -c
-                      sudo rm -f /run/systemd/shutdown/scheduled
+                  cancel_shutdown() {
+                      shutdown -c
+                      rm -f /run/systemd/shutdown/scheduled
                   }
 
                   # -- main --
 
-                  set -euo pipefail
-                  CONFIG=$(cat /home/ec2-user/.cloudX/autoshutdown-configuration)
+                  if [ ! -f "$CONFIG_FILE" ]; then
+                      log "no configuration file at $CONFIG_FILE - AUTOSHUTDOWN deactivated"
+                      exit 1
+                  fi
+                  CONFIG=$(cat "$CONFIG_FILE")
                   SHUTDOWN_TIMEOUT=${CONFIG#*=}
-                  if ! [[ $SHUTDOWN_TIMEOUT =~ ^[0-9]*$ ]]; then
-                      printf "\n*** shutdown timeout is invalid in /home/ec2-user/.cloudX/autoshutdown-configuration\n*** AUTOSHUTDOWN deactivated" >&3
+                  if ! [[ $SHUTDOWN_TIMEOUT =~ ^[0-9]+$ ]]; then
+                      log "invalid SHUTDOWN_TIMEOUT in $CONFIG_FILE - AUTOSHUTDOWN deactivated"
                       exit 1
                   fi
 
-                  touch "/home/ec2-user/.cloudX/autoshutdown-timestamp"
-
-                  echo "$(date): starting evaluation" >&3
+                  log "starting evaluation"
 
                   if is_active; then
-                      printf "\n$(date): activity detected, " >&3
                       if is_shutting_down; then
                           cancel_shutdown
-                          echo "canceled shutdown " >&3
+                          log "activity detected, canceled shutdown"
                       else
-                          echo "not shutting down" >&3
+                          log "activity detected, not shutting down"
                       fi
                   else
-                      printf "\n$(date): NO activity detected, " >&3
-                      if ! is_shutting_down ; then
-                          sudo shutdown -h $SHUTDOWN_TIMEOUT
-                          echo "initiated shutdown with waiting time of ${SHUTDOWN_TIMEOUT} minutes" >&3
+                      if ! is_shutting_down; then
+                          shutdown -h "$SHUTDOWN_TIMEOUT"
+                          log "no activity detected, initiated shutdown in ${SHUTDOWN_TIMEOUT} minutes"
                       else
-                          echo "shutdown still scheduled ${SHUTDOWN_TIMEOUT} minutes after $(stat -c '%z' /run/systemd/shutdown/scheduled | cut -f2 -d' ' | cut -f-2 -d: )" >&3
+                          log "no activity detected, shutdown already scheduled"
                       fi
                   fi
                   EOSCRIPT
-                  chmod 755 /home/ec2-user/.cloudX/stop-if-inactive.sh
-                  chown ec2-user:ec2-user /home/ec2-user/.cloudX/stop-if-inactive.sh
+                  chmod 755 /usr/local/bin/cloudX-stop-if-inactive.sh
+                  chown root:root /usr/local/bin/cloudX-stop-if-inactive.sh
                 - |
                   cat > /etc/systemd/system/cloudX-automatic-shutdown.service << 'EOSERVICE'
                   [Unit]
@@ -538,7 +591,7 @@ Resources:
                   Wants=cloudX-automatic-shutdown.timer
 
                   [Service]
-                  ExecStart=/home/ec2-user/.cloudX/stop-if-inactive.sh
+                  ExecStart=/usr/local/bin/cloudX-stop-if-inactive.sh
                   Type=oneshot
 
                   [Install]
