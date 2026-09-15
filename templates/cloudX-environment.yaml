@@ -503,10 +503,10 @@ Resources:
                       awk '$1 != "lo:" && NR > 2 { gsub(":", "", $1); rx += $2; tx += $10 } END { print rx + tx + 0 }' /proc/net/dev
                   }
 
-established_conns() {
-    # Use stable, non-resolving output so "new connection" detection isn't affected by DNS/service lookups or PID churn.
-    /usr/bin/lsof -nP -iTCP -sTCP:ESTABLISHED -a -u ec2-user -Fn 2>/dev/null | sed -n 's/^n//p' || true
-}
+                  established_conns() {
+                      # Use stable, non-resolving output so "new connection" detection isn't affected by DNS/service lookups or PID churn.
+                      /usr/bin/lsof -nP -iTCP -sTCP:ESTABLISHED -a -u ec2-user -Fn 2>/dev/null | sed -n 's/^n//p' || true
+                  }
 
                   is_active() {
                       local prev_bytes=0 cur_bytes delta cur_conns new_conns
