@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.1](https://github.com/easytocloud/cloudX/compare/v2.1.0...v2.1.1) (2026-09-15)
+
+
+### Bug Fixes
+
+* **autoshutdown:** fix SELinux exec denial and improve idle detection ([1d6453c](https://github.com/easytocloud/cloudX/commit/1d6453c05bfefe18a5d47b92fbebccb329dbf3f0))
+
 ## [2.1.0](https://github.com/easytocloud/cloudX/compare/v2.0.2...v2.1.0) (2026-09-08)
 
 
