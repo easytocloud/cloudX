@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.0](https://github.com/easytocloud/cloudX/compare/v2.1.2...v2.2.0) (2026-09-16)
+
+
+### Features
+
+* **instance:** self-assign owner tag, tag-driven shutdown timeout, retire ~/.cloudX ([9d62606](https://github.com/easytocloud/cloudX/commit/9d62606007368405ce3bbc3cdfdb558795018f71))
+
 ## [2.1.2](https://github.com/easytocloud/cloudX/compare/v2.1.1...v2.1.2) (2026-09-15)
 
 
