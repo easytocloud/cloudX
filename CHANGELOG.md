@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.1](https://github.com/easytocloud/cloudX/compare/v2.2.0...v2.2.1) (2026-09-16)
+
+
+### Bug Fixes
+
+* **environment:** remove literal {{resolve:ssm:...}} from shell comments ([797c949](https://github.com/easytocloud/cloudX/commit/797c94957050a8b5cbc23aad80531b63fb5a515e))
+
 ## [2.2.0](https://github.com/easytocloud/cloudX/compare/v2.1.2...v2.2.0) (2026-09-16)
 
 
