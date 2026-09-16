@@ -60,14 +60,25 @@ aws ssm start-associations-once \
 The `CloudXSetupDocument` runs as root except for the `user` step. Steps in order:
 
 1. `base` — yum packages, directory scaffold, marker file `.install-running`
-2. `autoshutdown` — writes idle-shutdown script + systemd timer
-3. `install_add_to_rc` — installs `/usr/local/bin/add-to-rc` (upsert-safe rc block manager)
-4. `install_direnv_layouts` — writes direnv layout files for `uv` and CodeArtifact
-5. `write_bootstrap` — writes `/tmp/cloudx-user-bootstrap.sh` (runs as ec2-user in next step)
-6. `user` — `su - ec2-user -c '/bin/bash /tmp/cloudx-user-bootstrap.sh'`
-7. `post` — sets zsh as default shell, optionally installs Docker, writes `~/.cloudX/version`, tags instance with `cloudX:version=<document>@<timestamp>`, removes `.install-running`
+2. `resolve_owner_tag` — if the ABAC owner tag is empty (cloudX-instance.yaml's `UserName` left blank), resolves it to the launching SSO principal's session name, read from the instance's own `aws:servicecatalog:provisioningPrincipalArn` auto-tag (Service Catalog only — see below). Runs early, right after `base`, to minimize the window where the instance's ABAC tag doesn't match anyone and `ssm:StartSession` would fail. Never overwrites an already-set tag.
+3. `autoshutdown` — writes idle-shutdown script + systemd timer
+4. `install_add_to_rc` — installs `/usr/local/bin/add-to-rc` (upsert-safe rc block manager)
+5. `install_direnv_layouts` — writes direnv layout files for `uv` and CodeArtifact
+6. `write_bootstrap` — writes `/tmp/cloudx-user-bootstrap.sh` (runs as ec2-user in next step)
+7. `user` — `su - ec2-user -c '/bin/bash /tmp/cloudx-user-bootstrap.sh'`
+8. `post` — sets zsh as default shell, optionally installs Docker, tags instance with `cloudX:version=<document>@<timestamp>`, removes `.install-running`, and removes `~/.cloudX` (retired — see below)
+9. `install_cloudx_cli` — writes `/usr/local/bin/cloudX` (`update`, `whoami`, `timeout show`/`timeout set`, `--version`)
 
 All steps must be idempotent — they run on every State Manager execution, not just at launch.
+
+### No per-user state files — tags are the source of truth
+
+`~/.cloudX/` is retired. Idle-shutdown timeout and the applied cloudX version used to live in files under that directory (`autoshutdown-configuration`, `version`); both are now EC2 tags exclusively:
+
+- `cloudX:shutdown_timeout` — read live (no caching) by `cloudX-stop-if-inactive.sh` on every run, falls back to `30` if unset. Seeded once from the `ShutdownTimeout` CFN parameter at first launch, then never overwritten by reconvergence — change it via `cloudX timeout set <minutes>`, effective within a minute.
+- `cloudX:version` — written by `post`, read via `cloudX --version` (or `cloudX whoami` for the ABAC owner tag).
+
+Resolving "self" for `UserName` and reading the ABAC tag key name (itself environment-specific, via `/cloudX/${EnvironmentName}/AbacTag`) both require Service Catalog as the launch path — there's no equivalent for a direct `create-stack` launch.
 
 ### Shell rc management
 

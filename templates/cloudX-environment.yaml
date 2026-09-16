@@ -393,23 +393,78 @@ Resources:
                     echo "Development Tools group already installed"
                   fi
                 - ruby --version && gem --version
-                - mkdir -p /home/ec2-user/.cloudX /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.config/direnv/lib
+                - mkdir -p /home/ec2-user/environment /home/ec2-user/.aws /home/ec2-user/.config/direnv/lib
                 - touch /home/ec2-user/.install-running /home/ec2-user/.cloudxrc /home/ec2-user/.cloudx.bash /home/ec2-user/.cloudx.zsh
-                - chown -R ec2-user:ec2-user /home/ec2-user/.cloudX /home/ec2-user/.aws /home/ec2-user/.config
+                - chown -R ec2-user:ec2-user /home/ec2-user/.aws /home/ec2-user/.config
                 - chown    ec2-user:ec2-user /home/ec2-user/environment /home/ec2-user/.install-running /home/ec2-user/.cloudxrc /home/ec2-user/.cloudx.bash /home/ec2-user/.cloudx.zsh
+
+          - name: resolve_owner_tag
+            action: aws:runShellScript
+            inputs:
+              runCommand:
+                - |
+                  # cloudX-instance.yaml lets UserName be left empty so the ABAC owner tag
+                  # defaults to "yourself" - the SSO principal that launched the Service
+                  # Catalog product - rather than forcing every user to type their own
+                  # session name by hand. CloudFormation has no way to see the launching
+                  # principal at parameter-default time, so that resolution has to happen
+                  # here instead, as early as possible (right after 'base'), to minimize
+                  # the window where the instance's ABAC tag is empty and ssm:StartSession
+                  # can't yet match anyone.
+                  #
+                  # This step is idempotent: it only ever fills in an empty tag. An
+                  # explicit UserName value (set when provisioning on someone else's
+                  # behalf) is never overwritten on later reconvergence.
+                  _TOKEN=$(curl -sf --connect-timeout 2 --max-time 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
+                  INSTANCE_ID=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
+                  REGION=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+
+                  # The tag *key* is itself environment-specific (the AbacTag parameter),
+                  # so resolve it from the same SSM parameter the CloudFormation templates
+                  # use via {{resolve:ssm:...}} at deploy time.
+                  ABAC_TAG_KEY=$(aws ssm get-parameter --region "$REGION" \
+                    --name "/cloudX/{{ EnvironmentName }}/AbacTag" \
+                    --query 'Parameter.Value' --output text 2>/dev/null || true)
+
+                  if [ -z "$ABAC_TAG_KEY" ] || [ "$ABAC_TAG_KEY" = "None" ]; then
+                    echo "ERROR: could not resolve AbacTag parameter for environment {{ EnvironmentName }} - skipping owner tag resolution" >&2
+                  else
+                    INSTANCE_TAGS_JSON=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" \
+                      --query 'Tags[].[Key,Value]' --output json 2>/dev/null || echo '[]')
+
+                    CURRENT_OWNER=$(echo "$INSTANCE_TAGS_JSON" | jq -r --arg k "$ABAC_TAG_KEY" '.[] | select(.[0]==$k) | .[1] // empty')
+                    PRINCIPAL_ARN=$(echo "$INSTANCE_TAGS_JSON" | jq -r '.[] | select(.[0]=="aws:servicecatalog:provisioningPrincipalArn") | .[1] // empty')
+
+                    if [ -n "$CURRENT_OWNER" ]; then
+                      echo "Owner tag '${ABAC_TAG_KEY}' already set to '${CURRENT_OWNER}' - leaving as-is."
+                    elif [ -z "$PRINCIPAL_ARN" ]; then
+                      echo "Owner tag '${ABAC_TAG_KEY}' is empty and no aws:servicecatalog:provisioningPrincipalArn tag was found (instance not launched via Service Catalog?) - leaving empty rather than guessing." >&2
+                    else
+                      # arn:aws:sts::ACCOUNT:assumed-role/ROLE/SESSION-NAME -> SESSION-NAME
+                      SESSION_NAME="${PRINCIPAL_ARN##*/}"
+                      if [ -z "$SESSION_NAME" ] || [ "$SESSION_NAME" = "$PRINCIPAL_ARN" ]; then
+                        echo "ERROR: could not parse a session name out of provisioning principal ARN '${PRINCIPAL_ARN}' - leaving owner tag empty" >&2
+                      else
+                        aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" \
+                          --tags "Key=${ABAC_TAG_KEY},Value=${SESSION_NAME}"
+                        echo "Set owner tag '${ABAC_TAG_KEY}' to '${SESSION_NAME}' (from provisioning principal ${PRINCIPAL_ARN})."
+                      fi
+                    fi
+                  fi
 
           - name: autoshutdown
             action: aws:runShellScript
             inputs:
               runCommand:
                 - |
-                  # A weekly/on-demand reconvergence only ever supplies EnvironmentName as
-                  # a document parameter (see AutoUpdateAssociation/cloudX update), so
-                  # {{ ShutdownTimeout }} resolves to the document's bare default on every
-                  # run after the first. Prefer the durable cloudX:shutdown_timeout tag
-                  # (stamped below) over the parameter, so a value chosen at launch time
-                  # survives every later reconvergence instead of being silently reset.
-                  PARAM_SHUTDOWN_TIMEOUT="{{ ShutdownTimeout }}"
+                  # Seed cloudX:shutdown_timeout from the ShutdownTimeout parameter, but only
+                  # on first launch - a weekly/on-demand reconvergence only ever supplies
+                  # EnvironmentName as a document parameter (see AutoUpdateAssociation/cloudX
+                  # update), so {{ ShutdownTimeout }} resolves to the document's bare default
+                  # on every run after the first. Once the tag exists it's the sole source of
+                  # truth (read live by cloudX-stop-if-inactive.sh below and writable via
+                  # `cloudX timeout set`) - never overwrite an existing value here.
                   _TOKEN=$(curl -sf --connect-timeout 2 --max-time 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
                   INSTANCE_ID=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
                   REGION=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $_TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
@@ -418,51 +473,17 @@ Resources:
                     --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:shutdown_timeout" \
                     --query 'Tags[0].Value' --output text 2>/dev/null || true)
 
-                  if [ -n "$TAG_SHUTDOWN_TIMEOUT" ] && [ "$TAG_SHUTDOWN_TIMEOUT" != "None" ]; then
-                    SHUTDOWN_TIMEOUT="$TAG_SHUTDOWN_TIMEOUT"
-                  else
-                    SHUTDOWN_TIMEOUT="$PARAM_SHUTDOWN_TIMEOUT"
+                  if [ -z "$TAG_SHUTDOWN_TIMEOUT" ] || [ "$TAG_SHUTDOWN_TIMEOUT" = "None" ]; then
+                    aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" \
+                      --tags "Key=cloudX:shutdown_timeout,Value={{ ShutdownTimeout }}" || true
                   fi
-
-                  cat > /home/ec2-user/.cloudX/autoshutdown-configuration << EOCONF
-                  SHUTDOWN_TIMEOUT=${SHUTDOWN_TIMEOUT}
-                  EOCONF
-                  chmod 644 /home/ec2-user/.cloudX/autoshutdown-configuration
-                  chown ec2-user:ec2-user /home/ec2-user/.cloudX/autoshutdown-configuration
-
-                  aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" \
-                    --tags "Key=cloudX:shutdown_timeout,Value=${SHUTDOWN_TIMEOUT}" || true
                 - |
-                  # Idempotent migration from older cloudX versions, which kept the idle-check
-                  # script, its ad-hoc log file, and a heartbeat file directly under ~/.cloudX.
-                  # The script now lives at /usr/local/bin (see below) - systemd (PID 1, SELinux
-                  # domain init_t) is denied execute on any file labeled user_home_t under
-                  # SELinux-enforcing distros, which silently broke autoshutdown entirely on
-                  # every such distro - and its logs go to the system journal instead of a
-                  # hand-rolled log file. Only autoshutdown-configuration, version, and this
-                  # README are meant to remain here.
-                  rm -f /home/ec2-user/.cloudX/stop-if-inactive.sh
-                  rm -f /home/ec2-user/.cloudX/autoshutdown-log
-                  rm -f /home/ec2-user/.cloudX/autoshutdown-timestamp
-
-                  cat > /home/ec2-user/.cloudX/README << 'EOREADME'
-                  This directory holds cloudX's per-instance runtime state:
-
-                    autoshutdown-configuration   SHUTDOWN_TIMEOUT=<minutes>, the idle timeout
-                                                  before this instance shuts itself down
-                                                  automatically.
-                    version                      The cloudX product version currently applied
-                                                  to this instance.
-
-                  The autoshutdown script itself lives at
-                  /usr/local/bin/cloudX-stop-if-inactive.sh (moved out of here so systemd can
-                  execute it under SELinux-enforcing distros, which deny PID 1 from executing
-                  files labeled user_home_t). Its logs go to the system journal:
-                  `journalctl -u cloudX-automatic-shutdown.service`.
-                  EOREADME
-                  chmod 644 /home/ec2-user/.cloudX/README
-                  chown ec2-user:ec2-user /home/ec2-user/.cloudX/README
-                - |
+                  # The idle-check script now lives at /usr/local/bin (see below) - systemd
+                  # (PID 1, SELinux domain init_t) is denied execute on any file labeled
+                  # user_home_t under SELinux-enforcing distros, which silently broke
+                  # autoshutdown entirely on every such distro - and reads
+                  # cloudX:shutdown_timeout directly instead of a local config file. Its
+                  # predecessor and ~/.cloudX generally are fully retired by the 'post' step.
                   cat > /usr/local/bin/cloudX-stop-if-inactive.sh << 'EOSCRIPT'
                   #!/bin/bash
                   #
@@ -487,7 +508,7 @@ Resources:
 
                   set -euo pipefail
 
-                  CONFIG_FILE=/home/ec2-user/.cloudX/autoshutdown-configuration
+                  DEFAULT_SHUTDOWN_TIMEOUT=30
                   STATE_DIR=/var/lib/cloudX
                   PREV_BYTES_FILE="$STATE_DIR/prev-bytes"
                   PREV_CONNS_FILE="$STATE_DIR/prev-conns"
@@ -497,6 +518,28 @@ Resources:
 
                   log() {
                       echo "$(date -Is): $*"
+                  }
+
+                  current_shutdown_timeout() {
+                      local token instance_id region value
+                      token=$(curl -sf --connect-timeout 2 --max-time 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60") || true
+                      instance_id=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-id) || true
+                      region=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/placement/region) || true
+
+                      if [ -z "$instance_id" ] || [ -z "$region" ]; then
+                          echo "$DEFAULT_SHUTDOWN_TIMEOUT"
+                          return
+                      fi
+
+                      value=$(aws ec2 describe-tags --region "$region" \
+                          --filters "Name=resource-id,Values=${instance_id}" "Name=key,Values=cloudX:shutdown_timeout" \
+                          --query 'Tags[0].Value' --output text 2>/dev/null || true)
+
+                      if [ -z "$value" ] || [ "$value" = "None" ] || ! [[ $value =~ ^[0-9]+$ ]]; then
+                          echo "$DEFAULT_SHUTDOWN_TIMEOUT"
+                      else
+                          echo "$value"
+                      fi
                   }
 
                   net_bytes() {
@@ -554,18 +597,9 @@ Resources:
 
                   # -- main --
 
-                  if [ ! -f "$CONFIG_FILE" ]; then
-                      log "no configuration file at $CONFIG_FILE - AUTOSHUTDOWN deactivated"
-                      exit 1
-                  fi
-                  CONFIG=$(cat "$CONFIG_FILE")
-                  SHUTDOWN_TIMEOUT=${CONFIG#*=}
-                  if ! [[ $SHUTDOWN_TIMEOUT =~ ^[0-9]+$ ]]; then
-                      log "invalid SHUTDOWN_TIMEOUT in $CONFIG_FILE - AUTOSHUTDOWN deactivated"
-                      exit 1
-                  fi
+                  SHUTDOWN_TIMEOUT=$(current_shutdown_timeout)
 
-                  log "starting evaluation"
+                  log "starting evaluation (shutdown timeout: ${SHUTDOWN_TIMEOUT}m)"
 
                   if is_active; then
                       if is_shutting_down; then
@@ -959,7 +993,6 @@ Resources:
                   fi
                   SSO_DOMAIN=$(aws ssm get-parameter --name "/cloudX/{{ EnvironmentName }}/SSODomain" --query 'Parameter.Value' --output text)
                   SSO_REGION=$(aws ssm get-parameter --name "/cloudX/{{ EnvironmentName }}/SSORegion" --query 'Parameter.Value' --output text)
-                  CLOUDX_HOME="/home/ec2-user/.cloudX"
                   EC2_USER_HOME="/home/ec2-user"
 
                   configure_git() {
@@ -1208,13 +1241,15 @@ Resources:
                   DOCUMENT_NAME="cloudX-{{ EnvironmentName }}-setup"
                   RUN_TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
                   VERSION_STRING="${DOCUMENT_NAME}@${RUN_TIMESTAMP}"
-                  mkdir -p /home/ec2-user/.cloudX
-                  printf '%s\n' "$VERSION_STRING" > /home/ec2-user/.cloudX/version
-                  chown ec2-user:ec2-user /home/ec2-user/.cloudX/version
                   aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" --tags "Key=cloudX:version,Value=${VERSION_STRING}" || true
                   touch /home/ec2-user/.install-done
                   rm -f /home/ec2-user/.install-running
                   chown ec2-user:ec2-user /home/ec2-user/.install-done
+                  # ~/.cloudX is retired - version and shutdown-timeout state now live solely
+                  # as EC2 tags (cloudX:version, cloudX:shutdown_timeout), read via the cloudX
+                  # CLI and cloudX-stop-if-inactive.sh. Remove any leftovers from older
+                  # cloudX versions.
+                  rm -rf /home/ec2-user/.cloudX
 
           - name: install_cloudx_cli
             action: aws:runShellScript
@@ -1230,16 +1265,24 @@ Resources:
                   Usage: cloudX <command>
 
                   Commands:
-                    update      Force this instance to reconverge to the current setup document now
-                    --version   Print the cloudX version currently applied to this instance
+                    update            Force this instance to reconverge to the current setup document now
+                    whoami            Print the ABAC owner tag value assigned to this instance
+                    timeout show      Print the current idle-shutdown timeout (minutes)
+                    timeout set <N>   Set the idle-shutdown timeout to N minutes (5-1440)
+                    --version         Print the cloudX version currently applied to this instance
                   EOF
                   }
 
-                  cmd_update() {
+                  # Populates INSTANCE_ID and REGION from IMDS. Shared by every subcommand.
+                  resolve_instance_and_region() {
                     TOKEN=$(curl -sf --connect-timeout 2 --max-time 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
                     INSTANCE_ID=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/instance-id)
                     REGION=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $TOKEN" http://169.254.169.254/latest/meta-data/placement/region)
+                  }
 
+                  # Requires INSTANCE_ID/REGION already set. Populates ENVIRONMENT_NAME from
+                  # the instance's own cloudX:environment tag.
+                  resolve_environment_name() {
                     ENVIRONMENT_NAME=$(aws ec2 describe-tags --region "$REGION" \
                       --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:environment" \
                       --query 'Tags[0].Value' --output text)
@@ -1247,6 +1290,24 @@ Resources:
                       echo "ERROR: could not determine cloudX:environment tag for ${INSTANCE_ID}" >&2
                       exit 1
                     fi
+                  }
+
+                  # Requires ENVIRONMENT_NAME already set. Populates ABAC_TAG_KEY - the tag
+                  # key name is itself environment-specific (the AbacTag parameter), the
+                  # same one CloudFormation resolves via {{resolve:ssm:...}} at deploy time.
+                  resolve_abac_tag_key() {
+                    ABAC_TAG_KEY=$(aws ssm get-parameter --region "$REGION" \
+                      --name "/cloudX/${ENVIRONMENT_NAME}/AbacTag" \
+                      --query 'Parameter.Value' --output text)
+                    if [ -z "$ABAC_TAG_KEY" ] || [ "$ABAC_TAG_KEY" = "None" ]; then
+                      echo "ERROR: could not resolve AbacTag parameter for environment ${ENVIRONMENT_NAME}" >&2
+                      exit 1
+                    fi
+                  }
+
+                  cmd_update() {
+                    resolve_instance_and_region
+                    resolve_environment_name
 
                     DOCUMENT_NAME=$(aws ssm get-parameter --region "$REGION" \
                       --name "/cloudX/${ENVIRONMENT_NAME}/SetupDocumentName" \
@@ -1261,9 +1322,65 @@ Resources:
                     echo "Triggered reconvergence (command ${COMMAND_ID}) - runs in the background."
                   }
 
+                  cmd_whoami() {
+                    resolve_instance_and_region
+                    resolve_environment_name
+                    resolve_abac_tag_key
+
+                    OWNER=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=${ABAC_TAG_KEY}" \
+                      --query 'Tags[0].Value' --output text)
+
+                    if [ -z "$OWNER" ] || [ "$OWNER" = "None" ]; then
+                      echo "ERROR: owner tag '${ABAC_TAG_KEY}' is not set on this instance" >&2
+                      exit 1
+                    fi
+                    echo "$OWNER"
+                  }
+
+                  cmd_timeout_show() {
+                    resolve_instance_and_region
+
+                    VALUE=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:shutdown_timeout" \
+                      --query 'Tags[0].Value' --output text)
+
+                    if [ -z "$VALUE" ] || [ "$VALUE" = "None" ]; then
+                      echo "30 (default - cloudX:shutdown_timeout tag not set)"
+                    else
+                      echo "$VALUE"
+                    fi
+                  }
+
+                  cmd_timeout_set() {
+                    local minutes="${1:-}"
+                    if ! [[ $minutes =~ ^[0-9]+$ ]] || [ "$minutes" -lt 5 ] || [ "$minutes" -gt 1440 ]; then
+                      echo "ERROR: timeout must be a whole number of minutes between 5 and 1440" >&2
+                      exit 1
+                    fi
+
+                    resolve_instance_and_region
+                    aws ec2 create-tags --region "$REGION" --resources "$INSTANCE_ID" \
+                      --tags "Key=cloudX:shutdown_timeout,Value=${minutes}"
+                    echo "Shutdown timeout set to ${minutes} minutes - takes effect within a minute."
+                  }
+
                   case "${1:-}" in
                     update) cmd_update ;;
-                    --version|version) cat /home/ec2-user/.cloudX/version ;;
+                    whoami) cmd_whoami ;;
+                    timeout)
+                      case "${2:-}" in
+                        show) cmd_timeout_show ;;
+                        set) cmd_timeout_set "${3:-}" ;;
+                        *) usage; exit 1 ;;
+                      esac
+                      ;;
+                    --version|version)
+                      resolve_instance_and_region
+                      aws ec2 describe-tags --region "$REGION" \
+                        --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:version" \
+                        --query 'Tags[0].Value' --output text
+                      ;;
                     *) usage; exit 1 ;;
                   esac
                   EOCLOUDX

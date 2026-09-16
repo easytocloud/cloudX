@@ -19,7 +19,7 @@ Deployed per developer per environment. Creates:
 
 - **EC2 Instance** — Amazon Linux 2023, reads environment config from Parameter Store via `{{resolve:ssm:...}}`.
 - **SetupAssociation** — an SSM State Manager association targeting this specific instance by ID. Fires immediately on launch (`ApplyOnlyAtCronInterval: false`) to deliver the first-run configuration, then recurs only on a `rate(365 days)` far-future schedule (effectively never). Passes per-instance parameters (`NVM`, `NvmVersion`, `DOCKER`, `PRIVPAGE`, `FORTOOLS`, `ShutdownTimeout`) to the setup document.
-- **Tags** — instance is tagged `cloudX:update=auto|manual` (controls whether the environment-level auto-update association picks it up) and `cloudX:version` (written by the setup document post-step with the document name and timestamp of the last successful run).
+- **Tags** — instance is tagged `cloudX:update=auto|manual` (controls whether the environment-level auto-update association picks it up), `cloudX:version` (written by the setup document post-step with the document name and timestamp of the last successful run), and `cloudX:shutdown_timeout` (idle-shutdown minutes; readable/writable on the instance via `cloudX timeout show`/`cloudX timeout set`). The ABAC owner tag (`UserName` parameter) may be left empty at launch — the setup document's `resolve_owner_tag` step then assigns it to the launching SSO principal, read from Service Catalog's `aws:servicecatalog:provisioningPrincipalArn` auto-tag.
 
 **UserData is minimal** — it only ensures the SSM Agent is running and creates a `.install-running` marker. All configuration is delivered by the SSM document, not UserData.
 

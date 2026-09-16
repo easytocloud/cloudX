@@ -69,12 +69,15 @@ Creates an EC2 instance configured as a development backend:
 - Tagged with `cloudX:update` and `cloudX:version` for update lifecycle management
 
 Parameters:
-- `UserName`: Username without prefix (e.g., "john")
+- `UserName`: ABAC tag value. Leave empty to assign the instance to yourself (the SSO user launching the stack) automatically; set explicitly only when provisioning on behalf of someone else
 - `EnvironmentName`: Name of the cloudX environment (must match an existing environment stack)
 - `InstanceType`: EC2 instance type (default: t3.2xlarge)
 - `VolumeSize`: Root volume size in GB (default: 80)
+- `ShutdownTimeout`: Minutes of inactivity before the instance shuts itself down (default: 30). Change it later without redeploying via `cloudX timeout set <minutes>` on the instance
 - `UpdateMode`: `auto` (re-applies setup every 7 days) or `manual` (first launch only, default: `auto`)
 - Software packages: `NVM`, `NvmVersion`, `DOCKER`, `PRIVPAGE`, `FORTOOLS`
+
+Leaving `UserName` empty requires the instance to be provisioned via AWS Service Catalog — self-assignment resolves the launching SSO principal from Service Catalog's `aws:servicecatalog:provisioningPrincipalArn` auto-tag.
 
 ### cloudX-user.yaml
 
@@ -109,7 +112,101 @@ aws ssm start-associations-once \
     --query 'Associations[].AssociationId' --output text)
 ```
 
-Instances tagged `cloudX:update=auto` also converge automatically every Sunday at 02:00 UTC without any manual trigger. After a successful run, each instance is tagged `cloudX:version=<document>@<timestamp>` and the value is written to `~/.cloudX/version` on the instance.
+Instances tagged `cloudX:update=auto` also converge automatically every Sunday at 02:00 UTC without any manual trigger. After a successful run, each instance is tagged `cloudX:version=<document>@<timestamp>`; run `cloudX --version` on the instance to read it back.
+
+## Identity Center (SSO) Permission Set
+
+`VSCodeConnectPolicy` (created by `cloudX-environment.yaml`, see [templates/cloudX-environment.yaml](templates/cloudX-environment.yaml)) grants `cloudX-proxy` the permissions it needs, scoped per-user via an ABAC condition on the instance's `AbacTag` tag. As written, that condition matches `aws:username`, which is only populated for **IAM users** (`cloudX-user.yaml`). It is never populated for an **Identity Center (SSO)** principal — those authenticate as an assumed-role session (`arn:aws:sts::<account>:assumed-role/AWSReservedSSO_.../<session-name>`), so `aws:username` is empty and the condition simply never matches.
+
+For SSO, the equivalent global condition key is **`sts:RoleSessionName`**. AWS Identity Center sets the session name to the SSO user's identifier (typically their username or email, depending on the identity source) — verify what your Identity Center actually issues with `aws sts get-caller-identity` while assumed, and make sure it's what you tag instances with (see `UserName` under [cloudX-instance.yaml](templates/cloudX-instance.yaml#L54), and the automatic self-assignment described in [CLAUDE.md](CLAUDE.md)).
+
+### Where this lives
+
+IAM Identity Center's Permission Sets and Account Assignments are managed centrally — in the Identity Center **management account** (or a delegated administrator account), not in the workload account(s) where `cloudX-environment.yaml`/`cloudX-instance.yaml` are deployed. This is a structurally different piece of infrastructure from the rest of cloudX:
+
+- It's defined **once**, independent of any single environment (`OTA`, `Prod`, etc.) — not redeployed per environment.
+- It's **assigned** to whichever account(s) and group(s)/user(s) should get cloudX access, via Account Assignments.
+- There is currently no CloudFormation template for this in the repo (deliberately, for now) — create the Permission Set by hand or via your own IaC in the Identity Center account, using the exact permissions below. A dedicated template (with the ABAC tag key as a parameter, matching `AbacTag` from the environment stack) is a natural follow-up once the manual version is validated.
+
+### Permission Set contents
+
+Create a Permission Set (e.g. named `cloudX-Connect`) with an **inline policy** equivalent to `VSCodeConnectPolicy`, but with `aws:username` replaced by `sts:RoleSessionName`:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "GetStatusWithSSM1",
+      "Effect": "Allow",
+      "Action": "ssm:DescribeInstanceInformation",
+      "Resource": "arn:aws:ec2:*:*:instance/*",
+      "Condition": {
+        "StringLike": {
+          "aws:ResourceTag/<AbacTag>": "${sts:RoleSessionName}"
+        }
+      }
+    },
+    {
+      "Sid": "GetStatusWithSSM2",
+      "Effect": "Allow",
+      "Action": "ssm:DescribeInstanceInformation",
+      "Resource": "arn:aws:ssm:*:*:*"
+    },
+    {
+      "Sid": "StartEc2",
+      "Effect": "Allow",
+      "Action": "ec2:StartInstances",
+      "Resource": "arn:aws:ec2:*:*:instance/*",
+      "Condition": {
+        "StringLike": {
+          "aws:ResourceTag/<AbacTag>": "${sts:RoleSessionName}"
+        }
+      }
+    },
+    {
+      "Sid": "StartSession1",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ec2:*:*:instance/*",
+      "Condition": {
+        "StringLike": {
+          "aws:ResourceTag/<AbacTag>": "${sts:RoleSessionName}"
+        }
+      }
+    },
+    {
+      "Sid": "StartSession2",
+      "Effect": "Allow",
+      "Action": "ssm:StartSession",
+      "Resource": "arn:aws:ssm:*::document/AWS-StartSSHSession"
+    },
+    {
+      "Sid": "AllowSendPubKey",
+      "Effect": "Allow",
+      "Action": ["ec2-instance-connect:SendSSHPublicKey"],
+      "Resource": "arn:aws:ec2:*:*:instance/*",
+      "Condition": {
+        "StringLike": {
+          "aws:ResourceTag/<AbacTag>": "${sts:RoleSessionName}"
+        }
+      }
+    }
+  ]
+}
+```
+
+Replace `<AbacTag>` (all four occurrences) with the literal tag key configured as the `AbacTag` parameter on the target environment's `cloudX-environment.yaml` stack (default `ez2:cloudx:user`) — Permission Set policies can't use `{{resolve:ssm:...}}` or CloudFormation `!Sub` the way the workload-account templates do, since this isn't a CloudFormation-deployed resource (yet). If you run multiple environments with **different** `AbacTag` values, you need either one Permission Set per distinct tag key, or a single Permission Set whose policy lists a condition per tag key used.
+
+Resource ARNs above are left account/region-wildcarded (`*:*`) since a Permission Set is typically assigned across multiple accounts/regions; scope them down to specific accounts if you only ever assign this to one.
+
+### What's intentionally left out
+
+`AKSKRotationPolicy` (the other policy `cloudX-environment.yaml` attaches to the IAM Group) grants `iam:CreateAccessKey`/`DeleteAccessKey`/etc. scoped to `user/${aws:username}` — it exists to let IAM users rotate their own long-lived access keys. This has **no SSO equivalent**: an Identity Center session has no IAM user and no access keys to rotate, so nothing needs to replace it in the Permission Set.
+
+### Account Assignment
+
+Once the Permission Set exists, create an **Account Assignment** targeting each workload account that runs cloudX instances, and the Identity Center group(s) or user(s) that should get access. Users then see cloudX access as an available role when they sign in via the Identity Center portal or `aws sso login`, and `cloudX-proxy` picks up their session automatically — no separate AKSK setup needed.
 
 ## Client-Side Setup
 

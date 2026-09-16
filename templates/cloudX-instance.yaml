@@ -27,11 +27,11 @@ Metadata:
           - UpdateMode
     ParameterLabels:
       UserName:
-        default: CloudX User name (without prefix)
+        default: "UserName for ABAC tag - leave empty to assign yourself (the launching SSO user), or set explicitly to provision for someone else"
       EnvironmentName:
         default: CloudX Environment name
       SSHHostName:
-        default: SSH Host Name (will be prefixed with cloudX-{Environment}-)
+        default: SSH Host Name
       InstanceType:
         default: EC2 Instance type
       VolumeSize:
@@ -54,7 +54,10 @@ Metadata:
 Parameters:
   UserName:
     Type: String
-    Description: Name of the CloudX user to create the instance for (without prefix).
+    Description: >-
+      ABAC tag value. Leave empty to assign the instance to yourself (the SSO
+      user launching this product) automatically. Set explicitly only when
+      provisioning an instance on behalf of someone else.
     Default: ''
 
   EnvironmentName:
@@ -67,9 +70,7 @@ Parameters:
     Type: String
     Default: ''
     Description: >-
-      Short name for SSH access to this instance. The actual SSH hostname will be
-      cloudX-{Environment}-{SSHHostName}. For example, if you enter "myserver" and the
-      Environment is "Prod", you will connect using: ssh cloudX-Prod-myserver.
+      Short name for SSH access to this instance. 
       This name will be picked up automatically by cloudX-proxy setup.
 
   InstanceType:
@@ -109,7 +110,7 @@ Parameters:
   ShutdownTimeout:
     Type: Number
     Description: Minutes of inactivity before the instance powers down automatically.
-    Default: 10
+    Default: 30
     MinValue: 5
     MaxValue: 1440
 
@@ -204,15 +205,17 @@ Resources:
       SubnetId: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/Subnet}}'
       Tags:
         - Key: Name
-          Value: !Sub "cloudX-${EnvironmentName}-${SSHHostName} | ${UserName}"
+          Value: !Sub "${SSHHostName}"
         - Key: cloudX:environment
           Value: !Sub "${EnvironmentName}"
         - Key: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/AbacTag}}'
-          Value: !Sub "cloudX-${EnvironmentName}-${UserName}"
+          Value: !Sub "${UserName}"
         - Key: cloudX:sso_domain
           Value: !Sub '{{resolve:ssm:/cloudX/${EnvironmentName}/SSODomain}}'
         - Key: cloudX:update
           Value: !Ref UpdateMode
+        - Key: cloudX:shutdown_timeout
+          Value: !Ref ShutdownTimeout
 
   SetupAssociation:
     Type: AWS::SSM::Association
