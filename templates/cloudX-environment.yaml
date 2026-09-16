@@ -421,7 +421,7 @@ Resources:
 
                   # The tag *key* is itself environment-specific (the AbacTag parameter),
                   # so resolve it from the same SSM parameter the CloudFormation templates
-                  # use via {{resolve:ssm:...}} at deploy time.
+                  # use via the resolve:ssm dynamic-reference syntax at deploy time.
                   ABAC_TAG_KEY=$(aws ssm get-parameter --region "$REGION" \
                     --name "/cloudX/{{ EnvironmentName }}/AbacTag" \
                     --query 'Parameter.Value' --output text 2>/dev/null || true)
@@ -1294,7 +1294,8 @@ Resources:
 
                   # Requires ENVIRONMENT_NAME already set. Populates ABAC_TAG_KEY - the tag
                   # key name is itself environment-specific (the AbacTag parameter), the
-                  # same one CloudFormation resolves via {{resolve:ssm:...}} at deploy time.
+                  # same one CloudFormation resolves via the resolve:ssm dynamic-reference
+                  # syntax at deploy time.
                   resolve_abac_tag_key() {
                     ABAC_TAG_KEY=$(aws ssm get-parameter --region "$REGION" \
                       --name "/cloudX/${ENVIRONMENT_NAME}/AbacTag" \
