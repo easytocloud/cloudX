@@ -588,7 +588,7 @@ Resources:
                           return
                       fi
 
-                      echo "$now $value" > "$TIMEOUT_CACHE_FILE"
+                      { printf '%s %s\n' "$now" "$value" > "${TIMEOUT_CACHE_FILE}.tmp" && mv -f "${TIMEOUT_CACHE_FILE}.tmp" "$TIMEOUT_CACHE_FILE"; } 2>/dev/null || true
                       echo "$value"
                   }
 
