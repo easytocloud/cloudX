@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.2](https://github.com/easytocloud/cloudX/compare/v2.2.1...v2.2.2) (2026-09-21)
+
+
+### Bug Fixes
+
+* **environment:** detect idle by sshd session presence, not network traffic ([a335617](https://github.com/easytocloud/cloudX/commit/a335617230486b94f1b87404a1f0ec6d63ff4f9c))
+
 ## [2.2.1](https://github.com/easytocloud/cloudX/compare/v2.2.0...v2.2.1) (2026-09-16)
 
 
