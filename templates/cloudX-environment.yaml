@@ -491,16 +491,44 @@ Resources:
                   # SHUTDOWN_TIMEOUT minutes once the instance is judged idle; cancels it if
                   # activity resumes before it fires.
                   #
-                  # Idle detection combines two signals, replacing the old "any established
-                  # connection = active" check (which never went idle: a merely-open-but-silent
-                  # SSH/VSCode-Remote/SSM tunnel counted as activity forever, even overnight
-                  # with zero real interactive use):
-                  #   - network traffic volume (RX+TX bytes/minute across all non-loopback
-                  #     interfaces) above a small noise floor - catches real interactive use
-                  #     while ignoring background keepalive chatter.
-                  #   - any brand-new ec2-user network connection since the last check - a
-                  #     short grace window so a session that's mid-handshake (and hasn't sent
-                  #     much traffic yet) isn't mistaken for idle.
+                  # Idle detection is session-presence based: the instance is active if and
+                  # only if a real interactive login session exists. Every human path into a
+                  # cloudX box terminates at sshd - plain SSH, VSCode Remote (which tunnels
+                  # over SSH) and SSM Session Manager / ssh-over-ssm (which forwards into
+                  # 127.0.0.1:22) - so counting live sshd session processes covers all three
+                  # without per-path special cases.
+                  #
+                  # This replaces a network-traffic-volume heuristic that could never report
+                  # idle on an EFS-mounted instance: efs-proxy NFS keepalive chatter alone
+                  # runs ~90 KB/min with nobody connected, permanently above the 50 KiB/min
+                  # threshold it was compared against. Observed on a DTA instance: 2074
+                  # consecutive "active" verdicts over three days - including 03:00 Saturday
+                  # with no user - and not one idle verdict.
+                  #
+                  # Deliberate design points, each a trap verified on a live instance:
+                  #   - Peer address is NOT examined. Under ssh-over-ssm the client address
+                  #     never reaches the instance: the tunnel is an outbound WebSocket from
+                  #     the SSM agent, so an active session appears only as
+                  #     127.0.0.1 <-> 127.0.0.1 and the client IP is absent from ss/netstat
+                  #     entirely. Requiring a non-loopback peer would shut the instance down
+                  #     under a connected user.
+                  #   - who/w/utmp are NOT used. VSCode Remote connects on a notty exec
+                  #     channel, so both are empty during a fully active session.
+                  #   - vscode-server ("code-<hash>") presence is NOT a signal. It outlives
+                  #     client disconnect by design (remote.SSH.serverShutdownTimeout) and
+                  #     holds loopback connections to its own extension hosts, which looks
+                  #     identical to real use. Its sshd tunnel does die with the client, so
+                  #     sshd is the honest signal where vscode-server is not.
+                  #   - SSM RunShellScript does NOT count as a session. ssm-document-worker
+                  #     descends from ssm-agent-worker and never spawns sshd, so automation
+                  #     (including this script's own delivery) cannot hold the instance up.
+                  #     An interactive Session Manager shell does spawn sshd, and counts.
+                  #   - efs-proxy, amazon-ssm-agent and similar daemons hold connections but
+                  #     no sshd session, so they are excluded structurally rather than by a
+                  #     blocklist that would need maintaining as the image changes.
+                  #
+                  # A load-average floor is kept as a secondary hold so a long detached build
+                  # (tmux/nohup with no SSH attached) is not killed mid-run.
                   #
                   # shutdown creates /run/systemd/shutdown/scheduled; that file's existence
                   # (checked by is_shutting_down) is the reliable indicator that a shutdown is
@@ -510,9 +538,9 @@ Resources:
 
                   DEFAULT_SHUTDOWN_TIMEOUT=30
                   STATE_DIR=/var/lib/cloudX
-                  PREV_BYTES_FILE="$STATE_DIR/prev-bytes"
-                  PREV_CONNS_FILE="$STATE_DIR/prev-conns"
-                  NOISE_THRESHOLD_BYTES=51200   # ~50 KiB/min, above typical background/keepalive chatter
+                  TIMEOUT_CACHE_FILE="$STATE_DIR/shutdown-timeout"
+                  TIMEOUT_CACHE_TTL=300         # re-read the tag at most once every 5 minutes
+                  LOAD_FLOOR_CENTI=50           # 15-min load avg >= 0.50 holds the instance up
 
                   mkdir -p "$STATE_DIR"
 
@@ -520,63 +548,89 @@ Resources:
                       echo "$(date -Is): $*"
                   }
 
+                  # Reads the cloudX:shutdown_timeout tag, cached for TIMEOUT_CACHE_TTL
+                  # seconds. Without the cache this made an EC2 API call every 60s on every
+                  # instance forever, and any throttle or transient failure silently reverted
+                  # the instance to the 30m default. On failure we now fall back to the last
+                  # known good value and only then to the default.
                   current_shutdown_timeout() {
-                      local token instance_id region value
+                      local token instance_id region value now cached_at cached_val
+
+                      now=$(date +%s)
+                      if [ -f "$TIMEOUT_CACHE_FILE" ]; then
+                          cached_at=$(cut -d' ' -f1 "$TIMEOUT_CACHE_FILE" 2>/dev/null || echo 0)
+                          cached_val=$(cut -d' ' -f2 "$TIMEOUT_CACHE_FILE" 2>/dev/null || echo "")
+                          if [[ $cached_at =~ ^[0-9]+$ ]] && [[ $cached_val =~ ^[0-9]+$ ]] \
+                             && [ $(( now - cached_at )) -lt "$TIMEOUT_CACHE_TTL" ]; then
+                              echo "$cached_val"
+                              return
+                          fi
+                      fi
+
                       token=$(curl -sf --connect-timeout 2 --max-time 5 -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60") || true
                       instance_id=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-id) || true
                       region=$(curl -sf --connect-timeout 2 --max-time 5 -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/placement/region) || true
 
-                      if [ -z "$instance_id" ] || [ -z "$region" ]; then
-                          echo "$DEFAULT_SHUTDOWN_TIMEOUT"
+                      value=""
+                      if [ -n "$instance_id" ] && [ -n "$region" ]; then
+                          value=$(aws ec2 describe-tags --region "$region" \
+                              --filters "Name=resource-id,Values=${instance_id}" "Name=key,Values=cloudX:shutdown_timeout" \
+                              --query 'Tags[0].Value' --output text 2>/dev/null || true)
+                      fi
+
+                      if [ -z "$value" ] || [ "$value" = "None" ] || ! [[ $value =~ ^[0-9]+$ ]]; then
+                          # Lookup failed - prefer the last known good value over the default.
+                          if [[ ${cached_val:-} =~ ^[0-9]+$ ]]; then
+                              echo "$cached_val"
+                          else
+                              echo "$DEFAULT_SHUTDOWN_TIMEOUT"
+                          fi
                           return
                       fi
 
-                      value=$(aws ec2 describe-tags --region "$region" \
-                          --filters "Name=resource-id,Values=${instance_id}" "Name=key,Values=cloudX:shutdown_timeout" \
-                          --query 'Tags[0].Value' --output text 2>/dev/null || true)
-
-                      if [ -z "$value" ] || [ "$value" = "None" ] || ! [[ $value =~ ^[0-9]+$ ]]; then
-                          echo "$DEFAULT_SHUTDOWN_TIMEOUT"
-                      else
-                          echo "$value"
-                      fi
+                      echo "$now $value" > "$TIMEOUT_CACHE_FILE"
+                      echo "$value"
                   }
 
-                  net_bytes() {
-                      awk '$1 != "lo:" && NR > 2 { gsub(":", "", $1); rx += $2; tx += $10 } END { print rx + tx + 0 }' /proc/net/dev
+                  # Count live interactive sshd sessions.
+                  #
+                  # OpenSSH >= 9.8 splits the old monolithic "sshd" into a listener plus
+                  # per-connection "sshd-session" processes; older builds use "sshd: user@pty"
+                  # style titles. Match both so this keeps working across AL2023 refreshes.
+                  #
+                  # Excluded: the "[listener]" master, "[accepted]"/"[net]" pre-auth privsep
+                  # helpers (a connection that has not authenticated is not a session yet, and
+                  # counting it would let an unauthenticated port-scan hold the instance up).
+                  session_count() {
+                      ps -eo args= 2>/dev/null | grep -E '^(sshd-session|sshd):' \
+                          | grep -vE '\[(listener|accepted|net)\]' \
+                          | grep -cvE '^sshd: *$' || true
                   }
 
-                  established_conns() {
-                      # Use stable, non-resolving output so "new connection" detection isn't affected by DNS/service lookups or PID churn.
-                      /usr/bin/lsof -nP -iTCP -sTCP:ESTABLISHED -a -u ec2-user -Fn 2>/dev/null | sed -n 's/^n//p' || true
+                  # 15-minute load average in hundredths, as an integer (0.50 -> 50), so a
+                  # detached long-running job keeps the instance alive with no SSH attached.
+                  load15_centi() {
+                      awk '{ printf "%d", ($3 * 100) + 0.5 }' /proc/loadavg 2>/dev/null || echo 0
                   }
 
                   is_active() {
-                      local prev_bytes=0 cur_bytes delta cur_conns new_conns
-                      [ -f "$PREV_BYTES_FILE" ] && prev_bytes=$(cat "$PREV_BYTES_FILE")
+                      local sessions load
 
-                      cur_bytes=$(net_bytes)
-                      delta=$(( cur_bytes - prev_bytes ))
-                      [ "$delta" -lt 0 ] && delta=0   # counter reset, e.g. interface bounce
-                      echo "$cur_bytes" > "$PREV_BYTES_FILE"
-
-                      cur_conns=$(established_conns)
-                      if [ -f "$PREV_CONNS_FILE" ]; then
-                          new_conns=$(comm -13 <(sort "$PREV_CONNS_FILE") <(printf '%s\n' "$cur_conns" | sort))
-                      else
-                          new_conns="$cur_conns"
-                      fi
-                      printf '%s\n' "$cur_conns" > "$PREV_CONNS_FILE"
-
-                      if [ "$delta" -ge "$NOISE_THRESHOLD_BYTES" ]; then
-                          log "active: ${delta} bytes/min network traffic (threshold ${NOISE_THRESHOLD_BYTES})"
+                      sessions=$(session_count)
+                      [[ $sessions =~ ^[0-9]+$ ]] || sessions=0
+                      if [ "$sessions" -gt 0 ]; then
+                          log "active: ${sessions} interactive sshd session(s)"
                           return 0
                       fi
-                      if [ -n "$new_conns" ]; then
-                          log "active: new ec2-user connection since last check"
+
+                      load=$(load15_centi)
+                      [[ $load =~ ^[0-9]+$ ]] || load=0
+                      if [ "$load" -ge "$LOAD_FLOOR_CENTI" ]; then
+                          log "active: no sshd session, but 15-min load $(awk '{print $3}' /proc/loadavg) >= 0.$(printf '%02d' $LOAD_FLOOR_CENTI)"
                           return 0
                       fi
-                      log "idle: ${delta} bytes/min, no new connections"
+
+                      log "idle: no interactive sshd session, 15-min load $(awk '{print $3}' /proc/loadavg)"
                       return 1
                   }
 
