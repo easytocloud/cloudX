@@ -541,6 +541,7 @@ Resources:
                   TIMEOUT_CACHE_FILE="$STATE_DIR/shutdown-timeout"
                   TIMEOUT_CACHE_TTL=300         # re-read the tag at most once every 5 minutes
                   LOAD_FLOOR_CENTI=50           # 15-min load avg >= 0.50 holds the instance up
+                  SNOOZE_FILE="$STATE_DIR/snooze-until"  # written by `cloudX snooze <minutes>`
 
                   mkdir -p "$STATE_DIR"
 
@@ -613,8 +614,39 @@ Resources:
                       awk '{ printf "%d", ($3 * 100) + 0.5 }' /proc/loadavg 2>/dev/null || echo 0
                   }
 
+                  # Written by `cloudX snooze <minutes>` (an epoch timestamp) to force
+                  # is_active for a bounded window - e.g. stepping away for a meeting
+                  # without permanently raising the shutdown timeout. Self-expiring: once
+                  # the timestamp has passed, this cleans the file up and returns false, so
+                  # normal idle detection resumes with no separate "unsnooze" step needed.
+                  # Sets SNOOZE_UNTIL (epoch seconds) when a valid, non-expired snooze is
+                  # active. Returns 0 (true) when snoozed, 1 (false) otherwise. Cleans up
+                  # the marker file once the window has passed, best-effort so that a
+                  # concurrent deletion does not abort the script under set -e.
+                  is_snoozed() {
+                      local until now
+
+                      [ -f "$SNOOZE_FILE" ] || return 1
+                      until=$(cat "$SNOOZE_FILE" 2>/dev/null) || return 1
+                      [[ $until =~ ^[0-9]+$ ]] || return 1
+
+                      now=$(date +%s)
+                      if [ "$now" -lt "$until" ]; then
+                          SNOOZE_UNTIL="$until"
+                          return 0
+                      fi
+                      rm -f "$SNOOZE_FILE" 2>/dev/null || true
+                      return 1
+                  }
+
                   is_active() {
                       local sessions load
+                      SNOOZE_UNTIL=""
+
+                      if is_snoozed; then
+                          log "active: snoozed until $(date -Is -d "@$SNOOZE_UNTIL")"
+                          return 0
+                      fi
 
                       sessions=$(session_count)
                       [[ $sessions =~ ^[0-9]+$ ]] || sessions=0
@@ -1321,6 +1353,8 @@ Resources:
                   Commands:
                     status            Show version, environment, update mode, idle timeout, and disk usage
                     update            Force this instance to reconverge to the current setup document now
+                    snooze <N>        Suspend idle auto-shutdown for N minutes (1-1440), without
+                                      changing the permanent timeout
                     logs              Show the output of the most recent local SSM command/document run
                     whoami            Print the ABAC owner tag value assigned to this instance
                     timeout show      Print the current idle-shutdown timeout (minutes)
@@ -1500,9 +1534,23 @@ Resources:
                     echo "Shutdown timeout set to ${minutes} minutes - takes effect within a minute."
                   }
 
+                  cmd_snooze() {
+                    local minutes="${1:-}" until
+                    if ! [[ $minutes =~ ^[0-9]+$ ]] || [ "$minutes" -lt 1 ] || [ "$minutes" -gt 1440 ]; then
+                      echo "ERROR: snooze duration must be a whole number of minutes between 1 and 1440" >&2
+                      exit 1
+                    fi
+
+                    until=$(( $(date +%s) + minutes * 60 ))
+                    sudo mkdir -p /var/lib/cloudX
+                    echo "$until" | sudo tee /var/lib/cloudX/snooze-until >/dev/null
+                    echo "Idle auto-shutdown snoozed for ${minutes} minutes (until $(date -Is -d "@${until}")). The permanent timeout is unchanged."
+                  }
+
                   case "${1:-}" in
                     status) cmd_status ;;
                     update) cmd_update ;;
+                    snooze) cmd_snooze "${2:-}" ;;
                     logs) cmd_logs ;;
                     whoami) cmd_whoami ;;
                     timeout)
