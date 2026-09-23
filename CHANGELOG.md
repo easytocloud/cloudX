@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.0](https://github.com/easytocloud/cloudX/compare/v2.2.2...v2.3.0) (2026-09-23)
+
+
+### Features
+
+* retroactively trigger release for cloudX status/logs/snooze commands ([4878636](https://github.com/easytocloud/cloudX/commit/4878636e1dfabb16ba2e37acd8ef8a85aaf04df0)), closes [#4](https://github.com/easytocloud/cloudX/issues/4) [#5](https://github.com/easytocloud/cloudX/issues/5) [#6](https://github.com/easytocloud/cloudX/issues/6)
+
 ## [2.2.2](https://github.com/easytocloud/cloudX/compare/v2.2.1...v2.2.2) (2026-09-21)
 
 
