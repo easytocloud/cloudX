@@ -619,26 +619,32 @@ Resources:
                   # without permanently raising the shutdown timeout. Self-expiring: once
                   # the timestamp has passed, this cleans the file up and returns false, so
                   # normal idle detection resumes with no separate "unsnooze" step needed.
+                  # Sets SNOOZE_UNTIL (epoch seconds) when a valid, non-expired snooze is
+                  # active. Returns 0 (true) when snoozed, 1 (false) otherwise. Cleans up
+                  # the marker file once the window has passed, best-effort so that a
+                  # concurrent deletion does not abort the script under set -e.
                   is_snoozed() {
                       local until now
 
                       [ -f "$SNOOZE_FILE" ] || return 1
-                      until=$(cat "$SNOOZE_FILE" 2>/dev/null || echo "")
+                      until=$(cat "$SNOOZE_FILE" 2>/dev/null) || return 1
                       [[ $until =~ ^[0-9]+$ ]] || return 1
 
                       now=$(date +%s)
                       if [ "$now" -lt "$until" ]; then
+                          SNOOZE_UNTIL="$until"
                           return 0
                       fi
-                      rm -f "$SNOOZE_FILE"
+                      rm -f "$SNOOZE_FILE" 2>/dev/null || true
                       return 1
                   }
 
                   is_active() {
                       local sessions load
+                      SNOOZE_UNTIL=""
 
                       if is_snoozed; then
-                          log "active: snoozed until $(date -Is -d "@$(cat "$SNOOZE_FILE")")"
+                          log "active: snoozed until $(date -Is -d "@$SNOOZE_UNTIL")"
                           return 0
                       fi
 
@@ -1345,9 +1351,11 @@ Resources:
                   Usage: cloudX <command>
 
                   Commands:
+                    status            Show version, environment, update mode, idle timeout, and disk usage
                     update            Force this instance to reconverge to the current setup document now
                     snooze <N>        Suspend idle auto-shutdown for N minutes (1-1440), without
                                       changing the permanent timeout
+                    logs              Show the output of the most recent local SSM command/document run
                     whoami            Print the ABAC owner tag value assigned to this instance
                     timeout show      Print the current idle-shutdown timeout (minutes)
                     timeout set <N>   Set the idle-shutdown timeout to N minutes (5-1440)
@@ -1386,6 +1394,84 @@ Resources:
                       echo "ERROR: could not resolve AbacTag parameter for environment ${ENVIRONMENT_NAME}" >&2
                       exit 1
                     fi
+                  }
+
+                  cmd_logs() {
+                    resolve_instance_and_region
+
+                    local base orch step_log err_log step
+                    base="/var/lib/amazon/ssm/${INSTANCE_ID}/document/orchestration"
+
+                    # This whole tree is root-owned, mode 700, all the way from
+                    # /var/lib/amazon/ssm/<instance-id> down - even a plain `[ -d ... ]` from
+                    # a non-root user fails on the traversal permission alone, regardless of
+                    # what exists underneath. Every check and read below goes through sudo.
+                    if ! sudo -n true 2>/dev/null; then
+                      echo "ERROR: cloudX logs requires passwordless sudo access" >&2
+                      exit 1
+                    fi
+
+                    if ! sudo test -d "$base"; then
+                      echo "ERROR: no local SSM orchestration logs found on this instance" >&2
+                      exit 1
+                    fi
+
+                    orch=$(sudo find "$base" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null \
+                      | sort -rn | head -1 | cut -d' ' -f2-)
+                    if [ -z "$orch" ]; then
+                      echo "ERROR: no local SSM orchestration logs found on this instance" >&2
+                      exit 1
+                    fi
+
+                    echo "Most recent local run: $(basename "$orch")"
+                    echo
+
+                    sudo find "$orch" -mindepth 3 -maxdepth 3 -type f -name stdout -printf '%T@ %p\n' 2>/dev/null \
+                      | sort -n | while read -r _ step_log; do
+                      step=$(basename "$(dirname "$step_log")")
+                      echo "=== ${step} ==="
+                      sudo cat "$step_log"
+                      err_log="${step_log%stdout}stderr"
+                      if sudo test -s "$err_log"; then
+                        echo "--- ${step} (stderr) ---"
+                        sudo cat "$err_log"
+                      fi
+                      echo
+                    done
+                  }
+
+                  cmd_status() {
+                    resolve_instance_and_region
+                    resolve_environment_name
+
+                    local version update_mode timeout disk_used disk_total disk_pcent
+
+                    version=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:version" \
+                      --query 'Tags[0].Value' --output text 2>/dev/null || echo None)
+                    if [ -z "$version" ] || [ "$version" = "None" ]; then version="unknown"; fi
+
+                    update_mode=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:update" \
+                      --query 'Tags[0].Value' --output text)
+                    [ "$update_mode" = "None" ] && update_mode="unknown"
+
+                    timeout=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:shutdown_timeout" \
+                      --query 'Tags[0].Value' --output text)
+                    if [ "$timeout" = "None" ]; then
+                      timeout="30 (default - tag not set)"
+                    else
+                      timeout="${timeout} minutes"
+                    fi
+
+                    read -r disk_total disk_used disk_pcent <<< "$(df -h / --output=size,used,pcent | tail -1)"
+
+                    echo "Environment:    ${ENVIRONMENT_NAME}"
+                    echo "cloudX version: ${version}"
+                    echo "Update mode:    ${update_mode}"
+                    echo "Idle timeout:   ${timeout}"
+                    echo "Root disk:      ${disk_used}/${disk_total} used (${disk_pcent})"
                   }
 
                   cmd_update() {
@@ -1462,8 +1548,10 @@ Resources:
                   }
 
                   case "${1:-}" in
+                    status) cmd_status ;;
                     update) cmd_update ;;
                     snooze) cmd_snooze "${2:-}" ;;
+                    logs) cmd_logs ;;
                     whoami) cmd_whoami ;;
                     timeout)
                       case "${2:-}" in
