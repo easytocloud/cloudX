@@ -1319,6 +1319,7 @@ Resources:
                   Usage: cloudX <command>
 
                   Commands:
+                    status            Show version, environment, update mode, idle timeout, and disk usage
                     update            Force this instance to reconverge to the current setup document now
                     whoami            Print the ABAC owner tag value assigned to this instance
                     timeout show      Print the current idle-shutdown timeout (minutes)
@@ -1358,6 +1359,40 @@ Resources:
                       echo "ERROR: could not resolve AbacTag parameter for environment ${ENVIRONMENT_NAME}" >&2
                       exit 1
                     fi
+                  }
+
+                  cmd_status() {
+                    resolve_instance_and_region
+                    resolve_environment_name
+
+                    local version update_mode timeout disk_used disk_total disk_pcent
+
+                    version=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:version" \
+                      --query 'Tags[0].Value' --output text 2>/dev/null || echo None)
+                    if [ -z "$version" ] || [ "$version" = "None" ]; then version="unknown"; fi
+
+                    update_mode=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:update" \
+                      --query 'Tags[0].Value' --output text)
+                    [ "$update_mode" = "None" ] && update_mode="unknown"
+
+                    timeout=$(aws ec2 describe-tags --region "$REGION" \
+                      --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:shutdown_timeout" \
+                      --query 'Tags[0].Value' --output text)
+                    if [ "$timeout" = "None" ]; then
+                      timeout="30 (default - tag not set)"
+                    else
+                      timeout="${timeout} minutes"
+                    fi
+
+                    read -r disk_total disk_used disk_pcent <<< "$(df -h / --output=size,used,pcent | tail -1)"
+
+                    echo "Environment:    ${ENVIRONMENT_NAME}"
+                    echo "cloudX version: ${version}"
+                    echo "Update mode:    ${update_mode}"
+                    echo "Idle timeout:   ${timeout}"
+                    echo "Root disk:      ${disk_used}/${disk_total} used (${disk_pcent})"
                   }
 
                   cmd_update() {
@@ -1421,6 +1456,7 @@ Resources:
                   }
 
                   case "${1:-}" in
+                    status) cmd_status ;;
                     update) cmd_update ;;
                     whoami) cmd_whoami ;;
                     timeout)
