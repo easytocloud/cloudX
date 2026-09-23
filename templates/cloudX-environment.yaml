@@ -1369,8 +1369,8 @@ Resources:
 
                     version=$(aws ec2 describe-tags --region "$REGION" \
                       --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:version" \
-                      --query 'Tags[0].Value' --output text)
-                    [ "$version" = "None" ] && version="unknown"
+                      --query 'Tags[0].Value' --output text 2>/dev/null || echo None)
+                    if [ -z "$version" ] || [ "$version" = "None" ]; then version="unknown"; fi
 
                     update_mode=$(aws ec2 describe-tags --region "$REGION" \
                       --filters "Name=resource-id,Values=${INSTANCE_ID}" "Name=key,Values=cloudX:update" \
