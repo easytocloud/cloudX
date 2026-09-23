@@ -1320,6 +1320,7 @@ Resources:
 
                   Commands:
                     update            Force this instance to reconverge to the current setup document now
+                    logs              Show the output of the most recent local SSM command/document run
                     whoami            Print the ABAC owner tag value assigned to this instance
                     timeout show      Print the current idle-shutdown timeout (minutes)
                     timeout set <N>   Set the idle-shutdown timeout to N minutes (5-1440)
@@ -1358,6 +1359,45 @@ Resources:
                       echo "ERROR: could not resolve AbacTag parameter for environment ${ENVIRONMENT_NAME}" >&2
                       exit 1
                     fi
+                  }
+
+                  cmd_logs() {
+                    resolve_instance_and_region
+
+                    local base orch step_log err_log step
+                    base="/var/lib/amazon/ssm/${INSTANCE_ID}/document/orchestration"
+
+                    # This whole tree is root-owned, mode 700, all the way from
+                    # /var/lib/amazon/ssm/<instance-id> down - even a plain `[ -d ... ]` from
+                    # a non-root user fails on the traversal permission alone, regardless of
+                    # what exists underneath. Every check and read below goes through sudo.
+                    if ! sudo test -d "$base"; then
+                      echo "ERROR: no local SSM orchestration logs found on this instance" >&2
+                      exit 1
+                    fi
+
+                    orch=$(sudo find "$base" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null \
+                      | sort -rn | head -1 | cut -d' ' -f2-)
+                    if [ -z "$orch" ]; then
+                      echo "ERROR: no local SSM orchestration logs found on this instance" >&2
+                      exit 1
+                    fi
+
+                    echo "Most recent local run: $(basename "$orch")"
+                    echo
+
+                    sudo find "$orch" -mindepth 3 -maxdepth 3 -type f -name stdout -printf '%T@ %p\n' 2>/dev/null \
+                      | sort -n | while read -r _ step_log; do
+                      step=$(basename "$(dirname "$step_log")")
+                      echo "=== ${step} ==="
+                      sudo cat "$step_log"
+                      err_log="${step_log%stdout}stderr"
+                      if sudo test -s "$err_log"; then
+                        echo "--- ${step} (stderr) ---"
+                        sudo cat "$err_log"
+                      fi
+                      echo
+                    done
                   }
 
                   cmd_update() {
@@ -1422,6 +1462,7 @@ Resources:
 
                   case "${1:-}" in
                     update) cmd_update ;;
+                    logs) cmd_logs ;;
                     whoami) cmd_whoami ;;
                     timeout)
                       case "${2:-}" in
